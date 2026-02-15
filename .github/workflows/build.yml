@@ -21,6 +21,16 @@ jobs:
         with:
           path: armbian-build/userpatches
 
+      - name: Debug - list userpatches content
+        working-directory: armbian-build
+        run: |
+          echo "=== Content of userpatches/ ==="
+          ls -la userpatches/
+          echo "=== Content of userpatches/boards/ (if exists) ==="
+          ls -la userpatches/boards/ || echo "boards/ directory not found"
+          echo "=== Content of userpatches/ (full tree) ==="
+          find userpatches -type f | head -20
+
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
 
