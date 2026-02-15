@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide minimal board config
+      - name: Fix nested structure and provide ALL required configs
         working-directory: armbian-build
         run: |
           set -e
@@ -34,7 +34,7 @@ jobs:
           fi
           echo ""
 
-          echo "===== 2. Creating minimal board config ====="
+          echo "===== 2. Creating board config ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -47,9 +47,21 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Ensuring no custom family config interferes ====="
-          rm -rf userpatches/config/sources/families
-          echo "✅ Removed any custom family configs, will use Armbian defaults."
+          echo "===== 3. Creating MINIMAL family config (rk3128.conf) ====="
+          mkdir -p userpatches/config/sources/families
+          # 使用逐行echo创建最简家族配置，只包含绝对必要的rockchip公共配置
+          echo '# Minimal Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
+          echo '#' >> userpatches/config/sources/families/rk3128.conf
+          echo '# This minimal config sources the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
+          echo '# which provides all necessary defaults for Rockchip devices' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Source the common rockchip configuration from official path' >> userpatches/config/sources/families/rk3128.conf
+          echo 'source "${BASH_SOURCE%/*}/include/rockchip-common.inc"' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Family tweaks - empty function to satisfy build system' >> userpatches/config/sources/families/rk3128.conf
+          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
+          echo "✅ Family config created:"
+          cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
           echo "===== 4. Creating kernel config placeholder ====="
@@ -59,16 +71,28 @@ jobs:
           ls -la config/kernel/
           echo ""
 
-          echo "===== 5. Copying board config to official path ====="
-          mkdir -p config/boards
+          echo "===== 5. Copying configs to official paths ====="
+          mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
-          echo "✅ Board config copied."
-          ls -la config/boards/
+          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          echo "✅ Configs copied."
+          ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 6. Final verification ====="
+          echo "===== 6. Verifying rockchip-common.inc exists ====="
+          if [ -f "config/sources/include/rockchip-common.inc" ]; then
+            echo "✅ rockchip-common.inc found at config/sources/include/rockchip-common.inc"
+          else
+            echo "⚠️  rockchip-common.inc not found in config/sources/include/"
+            echo "Searching for rockchip-common.inc in the whole armbian-build directory..."
+            find . -name "rockchip-common.inc" -type f
+          fi
+          echo ""
+
+          echo "===== 7. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Kernel config placeholder: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
+          echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
