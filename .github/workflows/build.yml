@@ -63,45 +63,55 @@ jobs:
 
           echo "===== 4. Creating family config for rk3128 (rk3128.conf) ====="
           mkdir -p userpatches/config/sources/families
-          # 注意：下一行中的美元符号和花括号在YAML中被转义
+          # 使用绝对路径确保找到公共 include 文件
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          source \"\${BASH_SOURCE%/*}/include/rockchip-common.inc\"
-          # Kernel settings
-          KERNELPATCHDIR="rk3128"
-          KERNELSOURCE="https://github.com/armbian/linux-rockchip"
-          KERNELBRANCH="branch:linux-4.4-rk3128"
-          # U-Boot settings
-          BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"
-          BOOTBRANCH="branch:v2017.09-rk3128"
-          # Family tweaks (empty for now)
-          family_tweaks() { :; }
-          EOF
+source /armbian/config/sources/include/rockchip-common.inc
+# Kernel settings
+KERNELPATCHDIR="rk3128"
+KERNELSOURCE="https://github.com/armbian/linux-rockchip"
+KERNELBRANCH="branch:linux-4.4-rk3128"
+# U-Boot settings
+BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"
+BOOTBRANCH="branch:v2017.09-rk3128"
+# Family tweaks (empty for now)
+family_tweaks() { :; }
+EOF
           echo "✅ Created userpatches/config/sources/families/rk3128.conf"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 5. Fixing line endings and permissions ====="
+          echo "===== 5. Verifying that rockchip-common.inc exists in official path ====="
+          if [ -f "config/sources/include/rockchip-common.inc" ]; then
+            echo "✅ rockchip-common.inc found at config/sources/include/rockchip-common.inc"
+          else
+            echo "⚠️  rockchip-common.inc not found in config/sources/include/; it might be in a different location."
+            echo "Searching for rockchip-common.inc in the whole armbian-build directory..."
+            find . -name "rockchip-common.inc" -type f
+          fi
+          echo ""
+
+          echo "===== 6. Fixing line endings and permissions ====="
           sudo apt-get update && sudo apt-get install -y dos2unix
           find userpatches -name "*.conf" -exec dos2unix {} \;
           find userpatches -name "*.sh" -exec chmod +x {} \;
           echo "✅ Permissions and line endings fixed."
           echo ""
 
-          echo "===== 6. Copy board config to official path (config/boards/) ====="
+          echo "===== 7. Copy board config to official path (config/boards/) ====="
           mkdir -p config/boards
           cp userpatches/boards/rk3128-box.conf config/boards/
           echo "✅ Copied to config/boards/rk3128-box.conf"
           ls -la config/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 7. Copy family config to official path (config/sources/families/) ====="
+          echo "===== 8. Copy family config to official path (config/sources/families/) ====="
           mkdir -p config/sources/families
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
           echo "✅ Copied to config/sources/families/rk3128.conf"
           ls -la config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 8. Final verification ====="
+          echo "===== 9. Final verification ====="
           echo "Board config: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
           echo "Family config: $(ls -la config/sources/families/rk3128.conf 2>/dev/null || echo 'Not found')"
           echo ""
