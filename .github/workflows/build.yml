@@ -3,7 +3,7 @@ name: Build Armbian for RK3128
 on:
   workflow_dispatch:          # 手动触发
   push:
-    branches: [ main ]        # 当推送到 main 分支时自动触发（可选）
+    branches: [ main ]        # 推送到 main 分支时自动触发（可选）
 
 jobs:
   build:
@@ -32,18 +32,31 @@ jobs:
       - name: Build Armbian
         working-directory: armbian-build
         env:
-          BOARD: rk3128-box          # 必须与 boards/ 下的文件名一致
-          BRANCH: legacy              # 使用 legacy 内核（4.4）
-          RELEASE: bullseye           # Debian 11，稳定
-          BUILD_MINIMAL: no            # 不构建最小化版本（保留常用工具）
-          BUILD_DESKTOP: no            # 无桌面环境
-          KERNEL_ONLY: no              # 构建完整镜像
-          KERNEL_CONFIGURE: no         # 不手动配置内核
-          COMPRESS_OUTPUTIMAGE: sha,img
-          ARCH: armhf                  # 强制 32 位 armhf 架构
-          USERPATCHES_PATH: ./userpatches
+          BOARD: rk3128-box               # 板型名称，必须与 boards/ 下的文件名一致
+          BRANCH: legacy                   # 使用 legacy 内核（4.4）
+          RELEASE: bullseye                # Debian 11，稳定
+          BUILD_MINIMAL: no                 # 不构建最小化版本
+          BUILD_DESKTOP: no                 # 无桌面环境
+          KERNEL_ONLY: no                   # 构建完整镜像
+          KERNEL_CONFIGURE: no              # 不手动配置内核
+          COMPRESS_OUTPUTIMAGE: sha,img     # 输出格式
+          ARCH: armhf                        # 强制 32 位 armhf 架构
+          USERPATCHES_PATH: ./userpatches    # 自定义脚本路径
+          IGNORE_UPDATES: yes                 # 忽略更新提示
         run: |
-          ./compile.sh
+          # 清理缓存，避免残留配置干扰
+          rm -rf output/cache
+          # 以非交互模式运行编译，并显式传递所有参数
+          ./compile.sh --noninteractive \
+            BOARD=${BOARD} \
+            BRANCH=${BRANCH} \
+            RELEASE=${RELEASE} \
+            BUILD_MINIMAL=${BUILD_MINIMAL} \
+            BUILD_DESKTOP=${BUILD_DESKTOP} \
+            KERNEL_ONLY=${KERNEL_ONLY} \
+            KERNEL_CONFIGURE=${KERNEL_CONFIGURE} \
+            COMPRESS_OUTPUTIMAGE=${COMPRESS_OUTPUTIMAGE} \
+            ARCH=${ARCH}
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
