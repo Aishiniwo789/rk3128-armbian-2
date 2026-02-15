@@ -12,20 +12,20 @@ jobs:
     steps:
       - name: Checkout Armbian build repository
         uses: actions/checkout@v4
-使用:
+        with:
           repository: armbian/build
           path: armbian-build
 
       - name: Checkout userpatches (current repository)
         uses: actions/checkout@v4
-使用:
+        with:
           path: armbian-build/userpatches
 
       - name: Install dependencies
-运行: |
+        run: |
           sudo apt-get update
           sudo apt-get install -y qemu-user-static binfmt-support \
-debootstrap 设备树编译器 pv bc \
+            debootstrap device-tree-compiler pv bc \
             build-essential git dosfstools \
             uuid-runtime udev kmod cpio
 
@@ -33,21 +33,21 @@ debootstrap 设备树编译器 pv bc \
         working-directory: armbian-build
         env:
           BOARD: rk3128-box          # 必须与 boards/ 下的文件名一致
-: legacy# 使用 legacy 内核（4.4）
-发行版: bullseye# Debian 11，稳定
+          BRANCH: legacy              # 使用 legacy 内核（4.4）
+          RELEASE: bullseye           # Debian 11，稳定
           BUILD_MINIMAL: no            # 不构建最小化版本（保留常用工具）
           BUILD_DESKTOP: no            # 无桌面环境
           KERNEL_ONLY: no              # 构建完整镜像
           KERNEL_CONFIGURE: no         # 不手动配置内核
-压缩输出图像: sha,img
+          COMPRESS_OUTPUTIMAGE: sha,img
           ARCH: armhf                  # 强制 32 位 armhf 架构
           USERPATCHES_PATH: ./userpatches
-运行: |
+        run: |
           ./compile.sh
 
-      - 名称: 上传固件
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
-使用:
+        with:
           name: armbian-rk3128-printserver
           path: armbian-build/output/images/*.img
-保留天数: 7
+          retention-days: 7
