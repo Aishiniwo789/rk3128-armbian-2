@@ -54,7 +54,6 @@ jobs:
           echo '# This file is required for the build system to recognize the rk3128 family.' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# Attempt to source the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
-          echo '# The path /armbian/config/sources/families/include/ is typical inside the Docker container.' >> userpatches/config/sources/families/rk3128.conf
           echo 'source /armbian/config/sources/families/include/rockchip-common.inc 2>/dev/null || true' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# Fallback: If the source fails, define the most essential variable.' >> userpatches/config/sources/families/rk3128.conf
@@ -66,7 +65,16 @@ jobs:
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Copying configs to official paths ====="
+          echo "===== 4. Creating placeholder kernel config file ====="
+          mkdir -p config/kernel
+          # 创建一个空的配置文件，满足构建系统的存在性检查
+          # 构建系统后续会用默认配置覆盖它
+          touch config/kernel/linux-rk3128-legacy.config
+          echo "✅ Placeholder kernel config created at config/kernel/linux-rk3128-legacy.config"
+          ls -la config/kernel/
+          echo ""
+
+          echo "===== 5. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -74,9 +82,10 @@ jobs:
           ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 5. Final verification ====="
+          echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
+          echo "Kernel config placeholder: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
