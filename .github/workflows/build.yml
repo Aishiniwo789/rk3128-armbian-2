@@ -63,19 +63,17 @@ jobs:
 
           echo "===== 4. Creating simplified family config for rk3128 (rk3128.conf) ====="
           mkdir -p userpatches/config/sources/families
-          # 创建一个不依赖外部文件的简化版本
-          cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-# Minimal Rockchip RK3128 family configuration
-# Kernel settings
-KERNELPATCHDIR="rk3128"
-KERNELSOURCE="https://github.com/armbian/linux-rockchip"
-KERNELBRANCH="branch:linux-4.4-rk3128"
-# U-Boot settings
-BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"
-BOOTBRANCH="branch:v2017.09-rk3128"
-# Family tweaks (empty for now)
-family_tweaks() { :; }
-EOF
+          # 使用echo逐行创建配置文件（避免YAML中的heredoc问题）
+          echo '# Minimal Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
+          echo '# Kernel settings' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELSOURCE="https://github.com/armbian/linux-rockchip"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELBRANCH="branch:linux-4.4-rk3128"' >> userpatches/config/sources/families/rk3128.conf
+          echo '# U-Boot settings' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTBRANCH="branch:v2017.09-rk3128"' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Family tweaks (empty for now)' >> userpatches/config/sources/families/rk3128.conf
+          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
           echo "✅ Created userpatches/config/sources/families/rk3128.conf"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
