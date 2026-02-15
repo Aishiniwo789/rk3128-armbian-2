@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide ALL required configs
+      - name: Fix nested structure and provide SELF-CONTAINED family config
         working-directory: armbian-build
         run: |
           set -e
@@ -47,20 +47,28 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating MINIMAL family config (rk3128.conf) ====="
+          echo "===== 3. Creating SELF-CONTAINED family config (rk3128.conf) ====="
           mkdir -p userpatches/config/sources/families
-          # 使用逐行echo创建最简家族配置，只包含绝对必要的rockchip公共配置
-          echo '# Minimal Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
-          echo '#' >> userpatches/config/sources/families/rk3128.conf
-          echo '# This minimal config sources the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
-          echo '# which provides all necessary defaults for Rockchip devices' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Source the common rockchip configuration from official path' >> userpatches/config/sources/families/rk3128.conf
-          echo 'source "${BASH_SOURCE%/*}/include/rockchip-common.inc"' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Family tweaks - empty function to satisfy build system' >> userpatches/config/sources/families/rk3128.conf
-          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
-          echo "✅ Family config created:"
+          # 创建一个完全自包含的家族配置文件，不依赖任何外部文件
+          cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
+          # Rockchip RK3128 family configuration - self-contained version
+          # Kernel settings for legacy (4.4) branch
+          KERNELPATCHDIR="rk3128"
+          KERNELSOURCE="https://github.com/armbian/linux-rockchip"
+          KERNELBRANCH="branch:linux-4.4"
+          KERNEL_MAJOR_MINOR="4.4"
+          
+          # U-Boot settings for legacy branch
+          BOOTSOURCE="https://github.com/u-boot/u-boot"
+          BOOTBRANCH="tag:v2017.09"
+          BOOTPATCHDIR="v2017.09"
+          
+          # Family tweaks function (required)
+          family_tweaks() {
+            : # No tweaks needed
+          }
+          EOF
+          echo "✅ Self-contained family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
@@ -79,19 +87,9 @@ jobs:
           ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 6. Verifying rockchip-common.inc exists ====="
-          if [ -f "config/sources/include/rockchip-common.inc" ]; then
-            echo "✅ rockchip-common.inc found at config/sources/include/rockchip-common.inc"
-          else
-            echo "⚠️  rockchip-common.inc not found in config/sources/include/"
-            echo "Searching for rockchip-common.inc in the whole armbian-build directory..."
-            find . -name "rockchip-common.inc" -type f
-          fi
-          echo ""
-
-          echo "===== 7. Final verification ====="
+          echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
