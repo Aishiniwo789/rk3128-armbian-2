@@ -27,7 +27,7 @@ jobs:
           echo "===== 1. Checking current userpatches content ====="
           ls -la userpatches/
           echo ""
-          
+
           # 修复可能的嵌套 userpatches 目录
           if [ -d "userpatches/userpatches" ]; then
             echo "⚠️  Detected nested userpatches directory. Fixing..."
@@ -39,7 +39,7 @@ jobs:
             echo "✅ No nested userpatches directory found."
           fi
           echo ""
-          
+
           echo "===== 2. Verifying boards directory ====="
           if [ -d "userpatches/boards" ]; then
             echo "✅ boards directory exists."
@@ -49,7 +49,7 @@ jobs:
             mkdir -p userpatches/boards
           fi
           echo ""
-          
+
           echo "===== 3. Checking rk3128-box.conf in userpatches/boards/ ====="
           if [ -f "userpatches/boards/rk3128-box.conf" ]; then
             echo "✅ rk3128-box.conf found."
@@ -60,50 +60,47 @@ jobs:
             exit 1
           fi
           echo ""
-          
+
           echo "===== 4. Creating family config for rk3128 (rk3128.conf) ====="
           mkdir -p userpatches/config/sources/families
+          # 注意：下一行中的美元符号和花括号在YAML中被转义
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-# Rockchip RK3128 family configuration (minimal)
-source "${BASH_SOURCE%/*}/include/rockchip-common.inc"
-
-# Kernel settings
-KERNELPATCHDIR="rk3128"
-KERNELSOURCE="https://github.com/armbian/linux-rockchip"
-KERNELBRANCH="branch:linux-4.4-rk3128"
-
-# U-Boot settings
-BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"
-BOOTBRANCH="branch:v2017.09-rk3128"
-
-# Family tweaks (empty for now)
-family_tweaks() { :; }
-EOF
+          source \"\${BASH_SOURCE%/*}/include/rockchip-common.inc\"
+          # Kernel settings
+          KERNELPATCHDIR="rk3128"
+          KERNELSOURCE="https://github.com/armbian/linux-rockchip"
+          KERNELBRANCH="branch:linux-4.4-rk3128"
+          # U-Boot settings
+          BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"
+          BOOTBRANCH="branch:v2017.09-rk3128"
+          # Family tweaks (empty for now)
+          family_tweaks() { :; }
+          EOF
           echo "✅ Created userpatches/config/sources/families/rk3128.conf"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
-          
+
           echo "===== 5. Fixing line endings and permissions ====="
           sudo apt-get update && sudo apt-get install -y dos2unix
           find userpatches -name "*.conf" -exec dos2unix {} \;
           find userpatches -name "*.sh" -exec chmod +x {} \;
           echo "✅ Permissions and line endings fixed."
           echo ""
-          
+
           echo "===== 6. Copy board config to official path (config/boards/) ====="
           mkdir -p config/boards
           cp userpatches/boards/rk3128-box.conf config/boards/
           echo "✅ Copied to config/boards/rk3128-box.conf"
           ls -la config/boards/rk3128-box.conf
           echo ""
-          
+
           echo "===== 7. Copy family config to official path (config/sources/families/) ====="
           mkdir -p config/sources/families
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
           echo "✅ Copied to config/sources/families/rk3128.conf"
           ls -la config/sources/families/rk3128.conf
           echo ""
-          
+
           echo "===== 8. Final verification ====="
           echo "Board config: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
           echo "Family config: $(ls -la config/sources/families/rk3128.conf 2>/dev/null || echo 'Not found')"
