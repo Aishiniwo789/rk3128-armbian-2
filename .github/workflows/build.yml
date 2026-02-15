@@ -21,21 +21,61 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Debug - list userpatches content
+      - name: Debug and fix board configuration
         working-directory: armbian-build
         run: |
-          echo "=== Content of userpatches/ ==="
+          echo "===== 1. Checking userpatches structure ====="
           ls -la userpatches/
-          echo "=== Content of userpatches/boards/ (if exists) ==="
-          ls -la userpatches/boards/ || echo "boards/ directory not found"
-          echo "=== Content of userpatches/ (full tree) ==="
-          find userpatches -type f | head -20
+          echo ""
+          
+          echo "===== 2. Checking boards directory ====="
+          ls -la userpatches/boards/ || echo "ERROR: boards/ directory missing!"
+          echo ""
+          
+          echo "===== 3. Checking board config file ====="
+          if [ -f userpatches/boards/rk3128-box.conf ]; then
+            echo "✅ File exists. Details:"
+            ls -l userpatches/boards/rk3128-box.conf
+            echo ""
+            echo "----- First 5 lines of config -----"
+            head -5 userpatches/boards/rk3128-box.conf
+            echo ""
+            echo "----- File encoding (should show ASCII text) -----"
+            file userpatches/boards/rk3128-box.conf
+          else
+            echo "❌ ERROR: rk3128-box.conf not found in userpatches/boards/!"
+            exit 1
+          fi
+          echo ""
+          
+          echo "===== 4. Converting to Unix line endings (LF) ====="
+          sudo apt-get update && sudo apt-get install -y dos2unix
+          dos2unix userpatches/boards/rk3128-box.conf
+          echo "Line endings converted."
+          echo ""
+          
+          echo "===== 5. Ensuring correct permissions ====="
+          chmod 644 userpatches/boards/rk3128-box.conf
+          echo "Permissions set to 644."
+          echo ""
+          
+          echo "===== 6. Creating fallback in official path ====="
+          mkdir -p config/boards
+          cp userpatches/boards/rk3128-box.conf config/boards/
+          echo "Copied to config/boards/rk3128-box.conf"
+          ls -l config/boards/rk3128-box.conf
+          echo ""
+          
+          echo "===== 7. Final verification ====="
+          echo "Custom path: $(ls -la userpatches/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
+          echo "Official path: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
+          echo ""
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
 
       - name: Clean cache
-        working-directory: armbian-build
+        working-directory: ar**mbian-build**
         run: rm -rf output/cache
 
       - name: Build Armbian
