@@ -47,9 +47,9 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with verified kernel source and version ====="
+          echo "===== 3. Creating family config with verified sources ====="
           mkdir -p userpatches/config/sources/families
-          echo '# Rockchip RK3128 family configuration with verified kernel source' > userpatches/config/sources/families/rk3128.conf
+          echo '# Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
           echo '# Using Firefly kernel source known to work with RK3128' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
@@ -59,9 +59,10 @@ jobs:
           echo 'KERNELBRANCH="branch:fireprime-linux"' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# U-Boot settings' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTBRANCH="branch:v2017.09-rk3128"' >> userpatches/config/sources/families/rk3128.conf
+          echo '# U-Boot settings - using mainline u-boot with v2017.09 tag (proven to work with RK3128)' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTSOURCE="https://github.com/u-boot/u-boot.git"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTBRANCH="tag:v2017.09"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTPATCHDIR="v2017.09"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# Family tweaks' >> userpatches/config/sources/families/rk3128.conf
           echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
