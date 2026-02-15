@@ -47,7 +47,7 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with verified kernel source ====="
+          echo "===== 3. Creating family config with verified kernel source and version ====="
           mkdir -p userpatches/config/sources/families
           echo '# Rockchip RK3128 family configuration with verified kernel source' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
@@ -57,6 +57,7 @@ jobs:
           echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNELBRANCH="branch:fireprime-linux"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# U-Boot settings' >> userpatches/config/sources/families/rk3128.conf
           echo 'BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"' >> userpatches/config/sources/families/rk3128.conf
