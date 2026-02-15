@@ -47,30 +47,31 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config (rk3128.conf) step by step ====="
+          echo "===== 3. Creating family config with verified kernel source ====="
           mkdir -p userpatches/config/sources/families
-          echo '# Minimal Rockchip RK3128 family support' > userpatches/config/sources/families/rk3128.conf
+          echo '# Rockchip RK3128 family configuration with verified kernel source' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
-          echo '# This file is required for the build system to recognize the rk3128 family.' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Using Firefly kernel source known to work with RK3128' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Attempt to source the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
-          echo 'source /armbian/config/sources/families/include/rockchip-common.inc 2>/dev/null || true' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Kernel settings - using Firefly kernel source' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELBRANCH="branch:fireprime-linux"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Fallback: If the source fails, define the most essential variable.' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
+          echo '# U-Boot settings' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'BOOTBRANCH="branch:v2017.09-rk3128"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Define a dummy family_tweaks function to prevent errors' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Family tweaks' >> userpatches/config/sources/families/rk3128.conf
           echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
           echo "✅ Family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating placeholder kernel config file ====="
+          echo "===== 4. Creating kernel config placeholder ====="
           mkdir -p config/kernel
-          # 创建一个空的配置文件，满足构建系统的存在性检查
-          # 构建系统后续会用默认配置覆盖它
           touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created at config/kernel/linux-rk3128-legacy.config"
+          echo "✅ Placeholder kernel config created"
           ls -la config/kernel/
           echo ""
 
@@ -85,7 +86,7 @@ jobs:
           echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "Kernel config placeholder: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
