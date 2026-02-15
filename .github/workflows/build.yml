@@ -24,7 +24,7 @@ jobs:
       - name: Fix nested structure and provide ALL required configs
         working-directory: armbian-build
         run: |
-          set -e # 发生错误时立即退出
+          set -e
           echo "===== 1. Fixing possible nested userpatches ====="
           if [ -d "userpatches/userpatches" ]; then
             echo "Fixing nested userpatches..."
@@ -36,7 +36,6 @@ jobs:
 
           echo "===== 2. Ensuring board config exists ====="
           mkdir -p userpatches/boards
-          # 创建板级配置文件
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
           BOARDFAMILY="rk3128"
@@ -50,22 +49,15 @@ jobs:
 
           echo "===== 3. Creating family config (rk3128.conf) step by step ====="
           mkdir -p userpatches/config/sources/families
-          # 使用 echo 逐行创建，确保 YAML 安全
           echo '# Minimal Rockchip RK3128 family support' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
           echo '# This file is required for the build system to recognize the rk3128 family.' >> userpatches/config/sources/families/rk3128.conf
-          echo '# It provides the bare minimum to satisfy the build scripts.' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Since we are using BRANCH=legacy, we can rely on the generic rockchip settings' >> userpatches/config/sources/families/rk3128.conf
-          echo '# by including the common rockchip configuration file.' >> userpatches/config/sources/families/rk3128.conf
-          echo '# We need to find its correct path inside the container.' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# Attempt to source the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
           echo '# The path /armbian/config/sources/families/include/ is typical inside the Docker container.' >> userpatches/config/sources/families/rk3128.conf
           echo 'source /armbian/config/sources/families/include/rockchip-common.inc 2>/dev/null || true' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Fallback: If the source fails, define only the most essential variable.' >> userpatches/config/sources/families/rk3128.conf
-          echo '# This variable is often checked by the build system. Setting it to legacy avoids further prompts.' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Fallback: If the source fails, define the most essential variable.' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# Define a dummy family_tweaks function to prevent errors' >> userpatches/config/sources/families/rk3128.conf
@@ -102,13 +94,12 @@ jobs:
           RELEASE: bullseye
           BUILD_MINIMAL: no
           BUILD_DESKTOP: no
-          KERNEL_ONLY: no
           KERNEL_CONFIGURE: no
           COMPRESS_OUTPUTIMAGE: sha,img
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
-        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_ONLY=$KERNEL_ONLY KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
+        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
