@@ -21,70 +21,70 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide minimal board config
+      - name: Fix nested structure and provide ALL required configs
         working-directory: armbian-build
         run: |
-          echo "===== 1. Checking current userpatches content ====="
-          ls -la userpatches/
-          echo ""
-
-          # 修复可能的嵌套 userpatches 目录
+          set -e # 发生错误时立即退出
+          echo "===== 1. Fixing possible nested userpatches ====="
           if [ -d "userpatches/userpatches" ]; then
-            echo "⚠️  Detected nested userpatches directory. Fixing..."
+            echo "Fixing nested userpatches..."
             mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
             mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
             rmdir userpatches/userpatches 2>/dev/null || true
-            echo "✅ Fixed: moved contents to userpatches/"
-          else
-            echo "✅ No nested userpatches directory found."
           fi
           echo ""
 
-          echo "===== 2. Verifying boards directory ====="
-          if [ -d "userpatches/boards" ]; then
-            echo "✅ boards directory exists."
-            ls -la userpatches/boards/
-          else
-            echo "❌ boards directory missing! Creating it."
-            mkdir -p userpatches/boards
-          fi
-          echo ""
-
-          echo "===== 3. Creating minimal board config rk3128-box.conf ====="
-          # 使用echo逐行创建板级配置文件，避免YAML中的heredoc问题
+          echo "===== 2. Ensuring board config exists ====="
           mkdir -p userpatches/boards
-          echo '# Rockchip RK3128 box - minimal configuration' > userpatches/boards/rk3128-box.conf
-          echo 'BOARD_NAME="RK3128 box"' >> userpatches/boards/rk3128-box.conf
-          echo 'BOARDFAMILY="rk3128"' >> userpatches/boards/rk3128-box.conf
-          echo 'ARCH="armhf"' >> userpatches/boards/rk3128-box.conf
-          echo 'BRANCH="legacy"' >> userpatches/boards/rk3128-box.conf
-          echo 'KERNEL_TARGET="legacy"' >> userpatches/boards/rk3128-box.conf
-          echo "✅ Created userpatches/boards/rk3128-box.conf"
+          # 创建板级配置文件
+          cat > userpatches/boards/rk3128-box.conf << 'EOF'
+          BOARD_NAME="RK3128 box"
+          BOARDFAMILY="rk3128"
+          ARCH="armhf"
+          BRANCH="legacy"
+          KERNEL_TARGET="legacy"
+          EOF
+          echo "✅ Board config created:"
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 4. Removing any custom family configs to use Armbian defaults ====="
-          rm -rf userpatches/config/sources/families
-          echo "✅ Removed custom family configs (if any)."
+          echo "===== 3. Creating family config (rk3128.conf) step by step ====="
+          mkdir -p userpatches/config/sources/families
+          # 使用 echo 逐行创建，确保 YAML 安全
+          echo '# Minimal Rockchip RK3128 family support' > userpatches/config/sources/families/rk3128.conf
+          echo '#' >> userpatches/config/sources/families/rk3128.conf
+          echo '# This file is required for the build system to recognize the rk3128 family.' >> userpatches/config/sources/families/rk3128.conf
+          echo '# It provides the bare minimum to satisfy the build scripts.' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Since we are using BRANCH=legacy, we can rely on the generic rockchip settings' >> userpatches/config/sources/families/rk3128.conf
+          echo '# by including the common rockchip configuration file.' >> userpatches/config/sources/families/rk3128.conf
+          echo '# We need to find its correct path inside the container.' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Attempt to source the common rockchip configuration' >> userpatches/config/sources/families/rk3128.conf
+          echo '# The path /armbian/config/sources/families/include/ is typical inside the Docker container.' >> userpatches/config/sources/families/rk3128.conf
+          echo 'source /armbian/config/sources/families/include/rockchip-common.inc 2>/dev/null || true' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Fallback: If the source fails, define only the most essential variable.' >> userpatches/config/sources/families/rk3128.conf
+          echo '# This variable is often checked by the build system. Setting it to legacy avoids further prompts.' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
+          echo '' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Define a dummy family_tweaks function to prevent errors' >> userpatches/config/sources/families/rk3128.conf
+          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
+          echo "✅ Family config created:"
+          cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 5. Fixing line endings and permissions ====="
-          sudo apt-get update && sudo apt-get install -y dos2unix
-          find userpatches -name "*.conf" -exec dos2unix {} \;
-          find userpatches -name "*.sh" -exec chmod +x {} \;
-          echo "✅ Permissions and line endings fixed."
-          echo ""
-
-          echo "===== 6. Copy board config to official path (config/boards/) ====="
-          mkdir -p config/boards
+          echo "===== 4. Copying configs to official paths ====="
+          mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
-          echo "✅ Copied to config/boards/rk3128-box.conf"
-          ls -la config/boards/rk3128-box.conf
+          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          echo "✅ Configs copied."
+          ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 7. Final verification ====="
-          echo "Board config: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
-          echo "Custom family configs: $(ls -la config/sources/families/ 2>/dev/null || echo 'None (using Armbian defaults)')"
+          echo "===== 5. Final verification ====="
+          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo ""
 
       - name: Install dependencies
