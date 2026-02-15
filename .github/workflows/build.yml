@@ -47,16 +47,16 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with verified sources ====="
+          echo "===== 3. Creating family config with Armbian rockchip kernel ====="
           mkdir -p userpatches/config/sources/families
-          echo '# Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
+          echo '# Rockchip RK3128 family configuration using Armbian rockchip kernel' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Using Firefly kernel source known to work with RK3128' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Using Armbian maintained rockchip kernel source' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Kernel settings - using Firefly kernel source' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Kernel settings - using Armbian rockchip kernel' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELBRANCH="branch:fireprime-linux"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELSOURCE="https://github.com/armbian/linux-rockchip"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELBRANCH="branch:linux-4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# U-Boot settings - using mainline u-boot with v2017.09 tag (proven to work with RK3128)' >> userpatches/config/sources/families/rk3128.conf
