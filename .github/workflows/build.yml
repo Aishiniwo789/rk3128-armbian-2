@@ -50,17 +50,16 @@ jobs:
           fi
           echo ""
 
-          echo "===== 3. Ensuring rk3128-box.conf exists and is minimal ====="
-          # 创建一个极简的板级配置，避免使用任何可能引起冲突的家族特定变量
-          cat > userpatches/boards/rk3128-box.conf << 'EOF'
-# Rockchip RK3128 box - minimal configuration
-BOARD_NAME="RK3128 box"
-BOARDFAMILY="rk3128"
-ARCH="armhf"
-BRANCH="legacy"
-KERNEL_TARGET="legacy"
-EOF
-          echo "✅ Created/Updated userpatches/boards/rk3128-box.conf"
+          echo "===== 3. Creating minimal board config rk3128-box.conf ====="
+          # 使用echo逐行创建板级配置文件，避免YAML中的heredoc问题
+          mkdir -p userpatches/boards
+          echo '# Rockchip RK3128 box - minimal configuration' > userpatches/boards/rk3128-box.conf
+          echo 'BOARD_NAME="RK3128 box"' >> userpatches/boards/rk3128-box.conf
+          echo 'BOARDFAMILY="rk3128"' >> userpatches/boards/rk3128-box.conf
+          echo 'ARCH="armhf"' >> userpatches/boards/rk3128-box.conf
+          echo 'BRANCH="legacy"' >> userpatches/boards/rk3128-box.conf
+          echo 'KERNEL_TARGET="legacy"' >> userpatches/boards/rk3128-box.conf
+          echo "✅ Created userpatches/boards/rk3128-box.conf"
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
