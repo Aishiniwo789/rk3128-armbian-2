@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide board & family configs
+      - name: Fix nested structure and provide minimal board config
         working-directory: armbian-build
         run: |
           echo "===== 1. Checking current userpatches content ====="
@@ -50,30 +50,23 @@ jobs:
           fi
           echo ""
 
-          echo "===== 3. Checking rk3128-box.conf in userpatches/boards/ ====="
-          if [ -f "userpatches/boards/rk3128-box.conf" ]; then
-            echo "✅ rk3128-box.conf found."
-            cat userpatches/boards/rk3128-box.conf
-          else
-            echo "❌ rk3128-box.conf not found! Searching..."
-            find userpatches -name "rk3128-box.conf" -type f
-            exit 1
-          fi
+          echo "===== 3. Ensuring rk3128-box.conf exists and is minimal ====="
+          # 创建一个极简的板级配置，避免使用任何可能引起冲突的家族特定变量
+          cat > userpatches/boards/rk3128-box.conf << 'EOF'
+# Rockchip RK3128 box - minimal configuration
+BOARD_NAME="RK3128 box"
+BOARDFAMILY="rk3128"
+ARCH="armhf"
+BRANCH="legacy"
+KERNEL_TARGET="legacy"
+EOF
+          echo "✅ Created/Updated userpatches/boards/rk3128-box.conf"
+          cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 4. Creating minimal family config for rk3128 (rk3128.conf) ====="
-          mkdir -p userpatches/config/sources/families
-          # 创建最简家族配置，移除可能导致问题的 KERNELBRANCH
-          echo '# Minimal Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
-          echo '# Kernel settings' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELSOURCE="https://github.com/armbian/linux-rockchip"' >> userpatches/config/sources/families/rk3128.conf
-          echo '# U-Boot settings' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTSOURCE="https://github.com/armbian/u-boot-rockchip"' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Family tweaks (empty for now)' >> userpatches/config/sources/families/rk3128.conf
-          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
-          echo "✅ Created userpatches/config/sources/families/rk3128.conf"
-          cat userpatches/config/sources/families/rk3128.conf
+          echo "===== 4. Removing any custom family configs to use Armbian defaults ====="
+          rm -rf userpatches/config/sources/families
+          echo "✅ Removed custom family configs (if any)."
           echo ""
 
           echo "===== 5. Fixing line endings and permissions ====="
@@ -90,16 +83,9 @@ jobs:
           ls -la config/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 7. Copy family config to official path (config/sources/families/) ====="
-          mkdir -p config/sources/families
-          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          echo "✅ Copied to config/sources/families/rk3128.conf"
-          ls -la config/sources/families/rk3128.conf
-          echo ""
-
-          echo "===== 8. Final verification ====="
+          echo "===== 7. Final verification ====="
           echo "Board config: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
-          echo "Family config: $(ls -la config/sources/families/rk3128.conf 2>/dev/null || echo 'Not found')"
+          echo "Custom family configs: $(ls -la config/sources/families/ 2>/dev/null || echo 'None (using Armbian defaults)')"
           echo ""
 
       - name: Install dependencies
