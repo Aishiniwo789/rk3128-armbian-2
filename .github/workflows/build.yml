@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide ALL required configs
+      - name: Fix nested structure and provide minimal board config
         working-directory: armbian-build
         run: |
           set -e
@@ -34,7 +34,7 @@ jobs:
           fi
           echo ""
 
-          echo "===== 2. Ensuring board config exists ====="
+          echo "===== 2. Creating minimal board config ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -47,49 +47,28 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with official Firefly kernel source (no branch) ====="
-          mkdir -p userpatches/config/sources/families
-          echo '# Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
-          echo '#' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Using Firefly official kernel source as per wiki' >> userpatches/config/sources/families/rk3128.conf
-          echo '# No branch specified - use default branch' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Kernel settings - from Firefly official wiki' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELBRANCH=""' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# U-Boot settings - using mainline u-boot with v2017.09 tag' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTSOURCE="https://github.com/u-boot/u-boot.git"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTBRANCH="tag:v2017.09"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'BOOTPATCHDIR="v2017.09"' >> userpatches/config/sources/families/rk3128.conf
-          echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Family tweaks' >> userpatches/config/sources/families/rk3128.conf
-          echo 'family_tweaks() { :; }' >> userpatches/config/sources/families/rk3128.conf
-          echo "✅ Family config created:"
-          cat userpatches/config/sources/families/rk3128.conf
+          echo "===== 3. Ensuring no custom family config interferes ====="
+          rm -rf userpatches/config/sources/families
+          echo "✅ Removed any custom family configs, will use Armbian defaults."
           echo ""
 
           echo "===== 4. Creating kernel config placeholder ====="
           mkdir -p config/kernel
           touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created"
+          echo "✅ Placeholder kernel config created at config/kernel/linux-rk3128-legacy.config"
           ls -la config/kernel/
           echo ""
 
-          echo "===== 5. Copying configs to official paths ====="
-          mkdir -p config/boards config/sources/families
+          echo "===== 5. Copying board config to official path ====="
+          mkdir -p config/boards
           cp userpatches/boards/rk3128-box.conf config/boards/
-          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          echo "✅ Configs copied."
-          ls -la config/boards/ config/sources/families/
+          echo "✅ Board config copied."
+          ls -la config/boards/
           echo ""
 
           echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel config placeholder: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
