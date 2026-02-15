@@ -21,61 +21,57 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Debug and fix board configuration
+      - name: Fix nested userpatches structure
         working-directory: armbian-build
         run: |
-          echo "===== 1. Checking userpatches structure ====="
+          echo "===== Checking current userpatches content ====="
           ls -la userpatches/
           echo ""
           
-          echo "===== 2. Checking boards directory ====="
-          ls -la userpatches/boards/ || echo "ERROR: boards/ directory missing!"
-          echo ""
-          
-          echo "===== 3. Checking board config file ====="
-          if [ -f userpatches/boards/rk3128-box.conf ]; then
-            echo "✅ File exists. Details:"
-            ls -l userpatches/boards/rk3128-box.conf
-            echo ""
-            echo "----- First 5 lines of config -----"
-            head -5 userpatches/boards/rk3128-box.conf
-            echo ""
-            echo "----- File encoding (should show ASCII text) -----"
-            file userpatches/boards/rk3128-box.conf
+          # 检查是否存在嵌套的 userpatches 目录（即 userpatches/userpatches）
+          if [ -d "userpatches/userpatches" ]; then
+            echo "⚠️  Detected nested userpatches directory. Fixing..."
+            # 将嵌套目录中的内容移动到正确的 userpatches 根目录
+            mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
+            mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
+            rmdir userpatches/userpatches 2>/dev/null || true
+            echo "✅ Fixed: moved contents to userpatches/"
           else
-            echo "❌ ERROR: rk3128-box.conf not found in userpatches/boards/!"
-            exit 1
+            echo "✅ No nested userpatches directory found."
           fi
           echo ""
           
-          echo "===== 4. Converting to Unix line endings (LF) ====="
+          echo "===== Verifying boards directory ====="
+          if [ -d "userpatches/boards" ]; then
+            echo "✅ boards directory exists."
+            ls -la userpatches/boards/
+          else
+            echo "❌ boards directory still missing! Creating it."
+            mkdir -p userpatches/boards
+          fi
+          echo ""
+          
+          echo "===== Checking rk3128-box.conf ====="
+          if [ -f "userpatches/boards/rk3128-box.conf" ]; then
+            echo "✅ rk3128-box.conf found."
+            cat userpatches/boards/rk3128-box.conf
+          else
+            echo "❌ rk3128-box.conf not found! Searching..."
+            find userpatches -name "rk3128-box.conf" -type f
+          fi
+          echo ""
+          
+          echo "===== Ensuring correct line endings and permissions ====="
           sudo apt-get update && sudo apt-get install -y dos2unix
-          dos2unix userpatches/boards/rk3128-box.conf
-          echo "Line endings converted."
-          echo ""
-          
-          echo "===== 5. Ensuring correct permissions ====="
-          chmod 644 userpatches/boards/rk3128-box.conf
-          echo "Permissions set to 644."
-          echo ""
-          
-          echo "===== 6. Creating fallback in official path ====="
-          mkdir -p config/boards
-          cp userpatches/boards/rk3128-box.conf config/boards/
-          echo "Copied to config/boards/rk3128-box.conf"
-          ls -l config/boards/rk3128-box.conf
-          echo ""
-          
-          echo "===== 7. Final verification ====="
-          echo "Custom path: $(ls -la userpatches/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
-          echo "Official path: $(ls -la config/boards/rk3128-box.conf 2>/dev/null || echo 'Not found')"
-          echo ""
+          find userpatches -name "*.conf" -exec dos2unix {} \;
+          find userpatches -name "*.sh" -exec chmod +x {} \;
+          echo "✅ Permissions and line endings fixed."
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
 
       - name: Clean cache
-        working-directory: ar**mbian-build**
+        working-directory: armbian-build
         run: rm -rf output/cache
 
       - name: Build Armbian
