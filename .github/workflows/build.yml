@@ -47,16 +47,16 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with CORRECT kernel branch ====="
+          echo "===== 3. Creating family config with OFFICIAL Firefly kernel source ====="
           mkdir -p userpatches/config/sources/families
           echo '# Rockchip RK3128 family configuration' > userpatches/config/sources/families/rk3128.conf
           echo '#' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Using Armbian rockchip kernel with correct branch for 4.4' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Using Firefly official kernel source for RK3128 (verified to work)' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
-          echo '# Kernel settings - based on Armbian rockchip family config' >> userpatches/config/sources/families/rk3128.conf
+          echo '# Kernel settings - from Firefly official wiki' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNELPATCHDIR="rk3128"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELSOURCE="https://github.com/armbian/linux-rockchip"' >> userpatches/config/sources/families/rk3128.conf
-          echo 'KERNELBRANCH="branch:stable-4.4-rk3288-linux"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"' >> userpatches/config/sources/families/rk3128.conf
+          echo 'KERNELBRANCH="branch:fireprime-linux"' >> userpatches/config/sources/families/rk3128.conf
           echo 'KERNEL_MAJOR_MINOR="4.4"' >> userpatches/config/sources/families/rk3128.conf
           echo '' >> userpatches/config/sources/families/rk3128.conf
           echo '# U-Boot settings - using mainline u-boot with v2017.09 tag' >> userpatches/config/sources/families/rk3128.conf
