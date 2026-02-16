@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide SELF-CONTAINED family config
+      - name: Fix nested structure and provide MINIMAL configs
         working-directory: armbian-build
         run: |
           set -e
@@ -47,28 +47,19 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating SELF-CONTAINED family config (rk3128.conf) ====="
+          echo "===== 3. Creating ABSOLUTE MINIMAL family config (rk3128.conf) ====="
           mkdir -p userpatches/config/sources/families
-          # 创建一个完全自包含的家族配置文件，不依赖任何外部文件
+          # 创建最简家族配置，只包含必需的函数，不指定任何源码相关变量
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - self-contained version
-          # Kernel settings for legacy (4.4) branch
-          KERNELPATCHDIR="rk3128"
-          KERNELSOURCE="https://github.com/armbian/linux-rockchip"
-          KERNELBRANCH="branch:linux-4.4"
-          KERNEL_MAJOR_MINOR="4.4"
+          # Rockchip RK3128 family configuration - absolute minimal version
+          # Let Armbian decide all kernel and u-boot sources based on BRANCH=legacy
           
-          # U-Boot settings for legacy branch
-          BOOTSOURCE="https://github.com/u-boot/u-boot"
-          BOOTBRANCH="tag:v2017.09"
-          BOOTPATCHDIR="v2017.09"
-          
-          # Family tweaks function (required)
+          # Family tweaks function (required by build system)
           family_tweaks() {
             : # No tweaks needed
           }
           EOF
-          echo "✅ Self-contained family config created:"
+          echo "✅ Minimal family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
@@ -89,7 +80,7 @@ jobs:
 
           echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -2)"
           echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
