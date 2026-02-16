@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide COMPLETE family config with compiler flags
+      - name: Fix nested structure and provide COMPLETE family config with BTRFS disabled
         working-directory: armbian-build
         run: |
           set -e
@@ -47,11 +47,11 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with compiler flags for ARM32 ====="
+          echo "===== 3. Creating family config with ARM32 fixes and BTRFS disabled ====="
           mkdir -p userpatches/config/sources/families
-          # 创建包含必要编译器标志的家族配置文件
+          # 创建包含必要编译器标志和内核配置选项的家族配置文件
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration with ARM32 compiler flags
+          # Rockchip RK3128 family configuration with ARM32 fixes
           
           # Source the common rockchip configuration if it exists
           source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
@@ -59,12 +59,16 @@ jobs:
           # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
           
-          # Add compiler flags to fix ARM32 divmod issues
+          # Add compiler flags to help with ARM32 builds
           KCFLAGS="${KCFLAGS} -mno-unaligned-access"
+          
+          # Disable BTRFS which causes __aeabi_uldivmod link errors on ARM32
+          KERNEL_CONFIGURE_EXTRA_ARGS="--disable CONFIG_BTRFS_FS"
           
           # Family tweaks function
           family_tweaks() {
-            : # No tweaks needed for basic functionality
+            # Additional kernel config tweaks can be added here
+            :
           }
           EOF
           echo "✅ Family config created:"
