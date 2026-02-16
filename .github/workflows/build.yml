@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide COMPLETE family config with BTRFS disabled
+      - name: Fix nested structure and provide ALL required configs
         working-directory: armbian-build
         run: |
           set -e
@@ -47,24 +47,16 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with BTRFS forcefully disabled ====="
+          echo "===== 3. Creating minimal family config ====="
           mkdir -p userpatches/config/sources/families
-          # 创建家族配置文件，重点是禁用BTRFS
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration
+          # Rockchip RK3128 family configuration - minimal
           
           # Source the common rockchip configuration if it exists
           source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
           
           # Explicitly set kernel version for legacy branch (required)
           KERNEL_MAJOR_MINOR="4.4"
-          
-          # Add compiler flags to help with ARM32 builds
-          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
-          
-          # CRITICAL: Disable BTRFS which causes __aeabi_uldivmod link errors on ARM32
-          # This uses the kernel config fragment mechanism to ensure BTRFS is off
-          KERNEL_CONFIGURE_EXTRA_ARGS="--disable CONFIG_BTRFS_FS"
           
           # Family tweaks function (required)
           family_tweaks() {
@@ -75,25 +67,38 @@ jobs:
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating kernel config placeholder ====="
-          mkdir -p config/kernel
-          touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created at config/kernel/linux-rk3128-legacy.config"
-          ls -la config/kernel/
+          echo "===== 4. Creating kernel config fragment to DISABLE BTRFS ====="
+          mkdir -p userpatches/config/kernel
+          # 创建linux-rk3128-legacy.config文件，但实际内容放入fragment
+          # 这个fragment会在内核配置阶段被自动合并
+          cat > userpatches/config/kernel/linux-rk3128-legacy.config << 'EOF'
+          # Disable BTRFS filesystem to fix ARM32 link error (undefined __aeabi_uldivmod)
+          CONFIG_BTRFS_FS=n
+          # Also disable its related features to be safe
+          CONFIG_BTRFS_FS_POSIX_ACL=n
+          CONFIG_BTRFS_FS_CHECK_INTEGRITY=n
+          CONFIG_BTRFS_FS_RUN_SANITY_TESTS=n
+          CONFIG_BTRFS_DEBUG=n
+          CONFIG_BTRFS_ASSERT=n
+          EOF
+          echo "✅ Kernel config fragment created at userpatches/config/kernel/linux-rk3128-legacy.config"
+          cat userpatches/config/kernel/linux-rk3128-legacy.config
           echo ""
 
           echo "===== 5. Copying configs to official paths ====="
-          mkdir -p config/boards config/sources/families
+          mkdir -p config/boards config/sources/families config/kernel
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          cp userpatches/config/kernel/linux-rk3128-legacy.config config/kernel/
           echo "✅ Configs copied."
-          ls -la config/boards/ config/sources/families/
+          ls -la config/boards/ config/sources/families/ config/kernel/
           echo ""
 
           echo "===== 6. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
+          echo "Kernel fragment (first 5 lines):"
+          head -5 config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo "Not found"
           echo ""
 
       - name: Install dependencies
