@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide ALL required configs
+      - name: Fix nested structure and provide all configs with custom hook
         working-directory: armbian-build
         run: |
           set -e
@@ -53,7 +53,7 @@ jobs:
           # Rockchip RK3128 family configuration - minimal
           
           # Source the common rockchip configuration if it exists
-          source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
+          source "\${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
           
           # Explicitly set kernel version for legacy branch (required)
           KERNEL_MAJOR_MINOR="4.4"
@@ -67,38 +67,59 @@ jobs:
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating kernel config fragment to DISABLE BTRFS ====="
-          mkdir -p userpatches/config/kernel
-          # 创建linux-rk3128-legacy.config文件，但实际内容放入fragment
-          # 这个fragment会在内核配置阶段被自动合并
-          cat > userpatches/config/kernel/linux-rk3128-legacy.config << 'EOF'
-          # Disable BTRFS filesystem to fix ARM32 link error (undefined __aeabi_uldivmod)
-          CONFIG_BTRFS_FS=n
-          # Also disable its related features to be safe
-          CONFIG_BTRFS_FS_POSIX_ACL=n
-          CONFIG_BTRFS_FS_CHECK_INTEGRITY=n
-          CONFIG_BTRFS_FS_RUN_SANITY_TESTS=n
-          CONFIG_BTRFS_DEBUG=n
-          CONFIG_BTRFS_ASSERT=n
+          echo "===== 4. Creating custom kernel config hook to FORCE disable BTRFS ====="
+          mkdir -p userpatches/lib/functions
+          # 创建custom_kernel_config钩子脚本
+          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
+          function extension_prepare_config__custom_kernel_config() {
+              # 此钩子将在内核配置阶段被调用
+              display_alert "Executing custom_kernel_config hook" "rk3128: Force disable BTRFS" "info"
+          }
+
+          function custom_kernel_config() {
+              # 注意：此函数可能在.config文件存在或不存在的情况下被调用多次
+              # 我们只在有.config文件时执行操作
+              if [[ -f .config ]]; then
+                  display_alert "Custom kernel config" "Disabling CONFIG_BTRFS_FS and friends" "info"
+                  
+                  # 使用kernel_config_set函数可靠地禁用选项
+                  kernel_config_set CONFIG_BTRFS_FS n
+                  kernel_config_set CONFIG_BTRFS_FS_POSIX_ACL n
+                  kernel_config_set CONFIG_BTRFS_FS_CHECK_INTEGRITY n
+                  kernel_config_set CONFIG_BTRFS_FS_RUN_SANITY_TESTS n
+                  kernel_config_set CONFIG_BTRFS_DEBUG n
+                  kernel_config_set CONFIG_BTRFS_ASSERT n
+                  
+                  display_alert "Custom kernel config" "BTRFS disabled successfully" "info"
+              else
+                  display_alert "Custom kernel config" ".config not present yet, skipping" "debug"
+              fi
+          }
           EOF
-          echo "✅ Kernel config fragment created at userpatches/config/kernel/linux-rk3128-legacy.config"
-          cat userpatches/config/kernel/linux-rk3128-legacy.config
+          echo "✅ Custom kernel config hook created"
+          cat userpatches/lib/functions/custom_kernel_config.sh
           echo ""
 
-          echo "===== 5. Copying configs to official paths ====="
+          echo "===== 5. Creating kernel config placeholder ====="
+          mkdir -p config/kernel
+          touch config/kernel/linux-rk3128-legacy.config
+          echo "✅ Placeholder kernel config created"
+          ls -la config/kernel/
+          echo ""
+
+          echo "===== 6. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families config/kernel
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          cp userpatches/config/kernel/linux-rk3128-legacy.config config/kernel/
+          cp userpatches/lib/functions/custom_kernel_config.sh config/ 2>/dev/null || true
           echo "✅ Configs copied."
-          ls -la config/boards/ config/sources/families/ config/kernel/
+          ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 6. Final verification ====="
+          echo "===== 7. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
-          echo "Kernel fragment (first 5 lines):"
-          head -5 config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo "Not found"
+          echo "Custom hook exists: $(ls -la config/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
