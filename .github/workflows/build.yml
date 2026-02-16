@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide COMPLETE family config
+      - name: Fix nested structure and provide COMPLETE family config with compiler flags
         working-directory: armbian-build
         run: |
           set -e
@@ -47,25 +47,27 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating COMPLETE family config (rk3128.conf) ====="
+          echo "===== 3. Creating family config with compiler flags for ARM32 ====="
           mkdir -p userpatches/config/sources/families
-          # 创建完整的家族配置文件，包含所有必需的变量
+          # 创建包含必要编译器标志的家族配置文件
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - complete version
-          # Based on Armbian requirements for legacy kernel
+          # Rockchip RK3128 family configuration with ARM32 compiler flags
           
-          # Source the common rockchip configuration (if it exists)
+          # Source the common rockchip configuration if it exists
           source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
           
-          # Explicitly set kernel version for legacy branch (required by build system)
+          # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
           
-          # Family tweaks function (required by build system)
+          # Add compiler flags to fix ARM32 divmod issues
+          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
+          
+          # Family tweaks function
           family_tweaks() {
             : # No tweaks needed for basic functionality
           }
           EOF
-          echo "✅ Complete family config created:"
+          echo "✅ Family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
