@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide all configs with custom hook
+      - name: Fix nested structure and provide ALL required configs
         working-directory: armbian-build
         run: |
           set -e
@@ -52,9 +52,6 @@ jobs:
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           # Rockchip RK3128 family configuration - minimal
           
-          # Source the common rockchip configuration if it exists
-          source "\${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
-          
           # Explicitly set kernel version for legacy branch (required)
           KERNEL_MAJOR_MINOR="4.4"
           
@@ -67,86 +64,646 @@ jobs:
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating custom kernel config hook to FORCE disable BTRFS ====="
-          mkdir -p userpatches/lib/functions
-          # 创建custom_kernel_config钩子脚本
-          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
-          function extension_prepare_config__custom_kernel_config() {
-              # 此钩子将在内核配置阶段被调用
-              display_alert "Executing custom_kernel_config hook" "rk3128: Force disable BTRFS" "info"
-          }
-
-          function custom_kernel_config() {
-              # 注意：此函数可能在.config文件存在或不存在的情况下被调用多次
-              # 我们只在有.config文件时执行操作
-              if [[ -f .config ]]; then
-                  display_alert "Custom kernel config" "Disabling CONFIG_BTRFS_FS and friends" "info"
-                  
-                  # 使用kernel_config_set函数可靠地禁用选项
-                  kernel_config_set CONFIG_BTRFS_FS n
-                  kernel_config_set CONFIG_BTRFS_FS_POSIX_ACL n
-                  kernel_config_set CONFIG_BTRFS_FS_CHECK_INTEGRITY n
-                  kernel_config_set CONFIG_BTRFS_FS_RUN_SANITY_TESTS n
-                  kernel_config_set CONFIG_BTRFS_DEBUG n
-                  kernel_config_set CONFIG_BTRFS_ASSERT n
-                  
-                  display_alert "Custom kernel config" "BTRFS disabled successfully" "info"
-              else
-                  display_alert "Custom kernel config" ".config not present yet, skipping" "debug"
-              fi
-          }
-          EOF
-          echo "✅ Custom kernel config hook created"
-          cat userpatches/lib/functions/custom_kernel_config.sh
-          echo ""
-
-          echo "===== 5. Creating kernel config placeholder ====="
-          mkdir -p config/kernel
-          touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created"
-          ls -la config/kernel/
-          echo ""
-
-          echo "===== 6. Copying configs to official paths ====="
-          mkdir -p config/boards config/sources/families config/kernel
-          cp userpatches/boards/rk3128-box.conf config/boards/
-          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          cp userpatches/lib/functions/custom_kernel_config.sh config/ 2>/dev/null || true
-          echo "✅ Configs copied."
-          ls -la config/boards/ config/sources/families/
-          echo ""
-
-          echo "===== 7. Final verification ====="
-          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
-          echo "Custom hook exists: $(ls -la config/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
-          echo ""
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
-
-      - name: Clean cache
-        working-directory: armbian-build
-        run: rm -rf output/cache
-
-      - name: Build Armbian
-        working-directory: armbian-build
-        env:
-          BOARD: rk3128-box
-          BRANCH: legacy
-          RELEASE: bullseye
-          BUILD_MINIMAL: no
-          BUILD_DESKTOP: no
-          KERNEL_CONFIGURE: no
-          COMPRESS_OUTPUTIMAGE: sha,img
-          ARCH: armhf
-          USERPATCHES_PATH: ./userpatches
-          IGNORE_UPDATES: yes
-        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
-
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: armbian-rk3128-printserver
-          path: armbian-build/output/images/*.img
-          retention-days: 7
+          echo "===== 4. Creating COMPLETE kernel config that excludes BTRFS ====="
+          mkdir -p userpatches/config/kernel
+          # 创建一个完整的linux-rk3128-legacy.config文件，它将完全覆盖默认配置
+          cat > userpatches/config/kernel/linux-rk3128-legacy.config << 'EOF'
+          #
+          # Automatically generated file; DO NOT EDIT.
+          # Linux/arm 4.4.194 Kernel Configuration
+          #
+          CONFIG_ARM=y
+          CONFIG_ARM_HAS_SG_CHAIN=y
+          CONFIG_MIGHT_HAVE_PCI=y
+          CONFIG_SYS_SUPPORTS_APM_EMULATION=y
+          CONFIG_HAVE_PROC_CPU=y
+          CONFIG_STACKTRACE_SUPPORT=y
+          CONFIG_LOCKDEP_SUPPORT=y
+          CONFIG_TRACE_IRQFLAGS_SUPPORT=y
+          CONFIG_RWSEM_XCHGADD_ALGORITHM=y
+          CONFIG_ARCH_HAS_BANDGAP=y
+          CONFIG_GENERIC_HWEIGHT=y
+          CONFIG_GENERIC_CALIBRATE_DELAY=y
+          CONFIG_NEED_DMA_MAP_STATE=y
+          CONFIG_ARCH_SUPPORTS_UPROBES=y
+          CONFIG_VECTORS_BASE=0xffff0000
+          CONFIG_ARM_PATCH_PHYS_VIRT=y
+          CONFIG_GENERIC_BUG=y
+          CONFIG_DEFCONFIG_LIST="/lib/modules/$UNAME_RELEASE/.config"
+          CONFIG_IRQ_WORK=y
+          CONFIG_BUILDTIME_EXTABLE_SORT=y
+          
+          #
+          # General setup
+          #
+          CONFIG_INIT_ENV_ARG_LIMIT=32
+          CONFIG_CROSS_COMPILE=""
+          # CONFIG_COMPILE_TEST is not set
+          CONFIG_LOCALVERSION=""
+          CONFIG_LOCALVERSION_AUTO=y
+          CONFIG_DEFAULT_HOSTNAME="(none)"
+          CONFIG_SWAP=y
+          CONFIG_SYSVIPC=y
+          CONFIG_SYSVIPC_SYSCTL=y
+          CONFIG_POSIX_MQUEUE=y
+          CONFIG_POSIX_MQUEUE_SYSCTL=y
+          CONFIG_CROSS_MEMORY_ATTACH=y
+          CONFIG_FHANDLE=y
+          # CONFIG_USELIB is not set
+          CONFIG_AUDIT=y
+          CONFIG_HAVE_ARCH_AUDITSYSCALL=y
+          
+          #
+          # IRQ subsystem
+          #
+          CONFIG_GENERIC_IRQ_PROBE=y
+          CONFIG_GENERIC_IRQ_SHOW=y
+          CONFIG_GENERIC_IRQ_SHOW_LEVEL=y
+          CONFIG_HARDIRQS_SW_RESEND=y
+          CONFIG_GENERIC_IRQ_CHIP=y
+          CONFIG_IRQ_DOMAIN=y
+          CONFIG_IRQ_DOMAIN_HIERARCHY=y
+          CONFIG_HANDLE_DOMAIN_IRQ=y
+          # CONFIG_IRQ_DOMAIN_DEBUG is not set
+          CONFIG_ARCH_CLOCKSOURCE_DATA=y
+          CONFIG_GENERIC_TIME_VSYSCALL=y
+          CONFIG_GENERIC_CLOCKEVENTS=y
+          CONFIG_ARCH_HAS_TICK_BROADCAST=y
+          CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
+          
+          #
+          # Timers subsystem
+          #
+          CONFIG_TICK_ONESHOT=y
+          CONFIG_NO_HZ_COMMON=y
+          # CONFIG_HZ_PERIODIC is not set
+          CONFIG_NO_HZ_IDLE=y
+          # CONFIG_NO_HZ_FULL is not set
+          # CONFIG_NO_HZ is not set
+          CONFIG_HIGH_RES_TIMERS=y
+          
+          #
+          # CPU/Task time and stats accounting
+          #
+          CONFIG_TICK_CPU_ACCOUNTING=y
+          # CONFIG_VIRT_CPU_ACCOUNTING_GEN is not set
+          # CONFIG_IRQ_TIME_ACCOUNTING is not set
+          CONFIG_BSD_PROCESS_ACCT=y
+          CONFIG_BSD_PROCESS_ACCT_V3=y
+          CONFIG_TASKSTATS=y
+          CONFIG_TASK_DELAY_ACCT=y
+          CONFIG_TASK_XACCT=y
+          CONFIG_TASK_IO_ACCOUNTING=y
+          
+          #
+          # RCU Subsystem
+          #
+          CONFIG_TREE_RCU=y
+          # CONFIG_RCU_EXPERT is not set
+          CONFIG_SRCU=y
+          # CONFIG_TASKS_RCU is not set
+          CONFIG_RCU_STALL_COMMON=y
+          # CONFIG_RCU_USER_QS is not set
+          CONFIG_RCU_FANOUT=32
+          CONFIG_RCU_FANOUT_LEAF=16
+          # CONFIG_RCU_FANOUT_EXACT is not set
+          # CONFIG_RCU_FAST_NO_HZ is not set
+          # CONFIG_TREE_RCU_TRACE is not set
+          # CONFIG_RCU_NOCB_CPU is not set
+          CONFIG_BUILD_BIN2C=y
+          # CONFIG_IKCONFIG is not set
+          CONFIG_LOG_BUF_SHIFT=18
+          CONFIG_LOG_CPU_MAX_BUF_SHIFT=12
+          CONFIG_GENERIC_SCHED_CLOCK=y
+          CONFIG_ARCH_SUPPORTS_NUMA_BALANCING=y
+          CONFIG_CGROUPS=y
+          # CONFIG_CGROUP_DEBUG is not set
+          CONFIG_CGROUP_FREEZER=y
+          CONFIG_CGROUP_PIDS=y
+          CONFIG_CGROUP_DEVICE=y
+          CONFIG_CGROUP_CPUACCT=y
+          CONFIG_CGROUP_PERF=y
+          CONFIG_CGROUP_SCHED=y
+          CONFIG_FAIR_GROUP_SCHED=y
+          CONFIG_CFS_BANDWIDTH=y
+          CONFIG_RT_GROUP_SCHED=y
+          # CONFIG_BLK_CGROUP is not set
+          # CONFIG_CHECKPOINT_RESTORE is not set
+          CONFIG_NAMESPACES=y
+          # CONFIG_UTS_NS is not set
+          # CONFIG_IPC_NS is not set
+          # CONFIG_USER_NS is not set
+          # CONFIG_PID_NS is not set
+          # CONFIG_NET_NS is not set
+          CONFIG_SCHED_AUTOGROUP=y
+          # CONFIG_SYSFS_DEPRECATED is not set
+          CONFIG_RELAY=y
+          CONFIG_BLK_DEV_INITRD=y
+          CONFIG_INITRAMFS_SOURCE=""
+          CONFIG_RD_GZIP=y
+          CONFIG_RD_BZIP2=y
+          CONFIG_RD_LZMA=y
+          CONFIG_RD_XZ=y
+          CONFIG_RD_LZO=y
+          CONFIG_RD_LZ4=y
+          # CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE is not set
+          CONFIG_CC_OPTIMIZE_FOR_SIZE=y
+          CONFIG_SYSCTL=y
+          CONFIG_ANON_INODES=y
+          CONFIG_HAVE_UID16=y
+          CONFIG_BPF=y
+          # CONFIG_EXPERT is not set
+          CONFIG_UID16=y
+          CONFIG_MULTIUSER=y
+          # CONFIG_SGETMASK_SYSCALL is not set
+          CONFIG_SYSFS_SYSCALL=y
+          # CONFIG_SYSCTL_SYSCALL is not set
+          CONFIG_POSIX_TIMERS=y
+          CONFIG_KALLSYMS=y
+          # CONFIG_KALLSYMS_ALL is not set
+          CONFIG_PRINTK=y
+          CONFIG_BUG=y
+          CONFIG_ELF_CORE=y
+          CONFIG_BASE_FULL=y
+          CONFIG_FUTEX=y
+          CONFIG_EPOLL=y
+          CONFIG_SIGNALFD=y
+          CONFIG_TIMERFD=y
+          CONFIG_EVENTFD=y
+          # CONFIG_BPF_SYSCALL is not set
+          CONFIG_SHMEM=y
+          CONFIG_AIO=y
+          CONFIG_ADVISE_SYSCALLS=y
+          # CONFIG_USERFAULTFD is not set
+          CONFIG_PCI_QUIRKS=y
+          CONFIG_MEMBARRIER=y
+          CONFIG_EMBEDDED=n
+          # CONFIG_HAVE_PERF_EVENTS is not set
+          
+          #
+          # Kernel Performance Events And Counters
+          #
+          # CONFIG_PERF_EVENTS is not set
+          # CONFIG_DEBUG_PERF_USE_VMALLOC is not set
+          CONFIG_VM_EVENT_COUNTERS=y
+          # CONFIG_COMPAT_BRK is not set
+          CONFIG_SLAB=y
+          # CONFIG_SLUB is not set
+          # CONFIG_SLOB is not set
+          # CONFIG_SYSTEM_DATA_VERIFICATION is not set
+          # CONFIG_PROFILING is not set
+          CONFIG_HAVE_OPROFILE=y
+          # CONFIG_KPROBES is not set
+          # CONFIG_JUMP_LABEL is not set
+          # CONFIG_UPROBES is not set
+          # CONFIG_HAVE_64BIT_ALIGNED_ACCESS is not set
+          CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS=y
+          CONFIG_ARCH_USE_BUILTIN_BSWAP=y
+          CONFIG_HAVE_KPROBES=y
+          CONFIG_HAVE_KRETPROBES=y
+          CONFIG_HAVE_OPTPROBES=y
+          CONFIG_HAVE_ARCH_TRACEHOOK=y
+          CONFIG_HAVE_DMA_CONTIGUOUS=y
+          CONFIG_GENERIC_SMP_IDLE_THREAD=y
+          CONFIG_GENERIC_IDLE_POLL_SETUP=y
+          CONFIG_HAVE_REGS_AND_STACK_ACCESS_API=y
+          CONFIG_HAVE_CLK=y
+          CONFIG_HAVE_DMA_API_DEBUG=y
+          CONFIG_HAVE_HW_BREAKPOINT=y
+          CONFIG_HAVE_PERF_REGS=y
+          CONFIG_HAVE_PERF_USER_STACK_DUMP=y
+          CONFIG_HAVE_ARCH_JUMP_LABEL=y
+          CONFIG_ARCH_WANT_IPC_PARSE_VERSION=y
+          CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
+          CONFIG_SECCOMP_FILTER=y
+          CONFIG_HAVE_CC_STACKPROTECTOR=y
+          # CONFIG_CC_STACKPROTECTOR is not set
+          CONFIG_CC_STACKPROTECTOR_NONE=y
+          # CONFIG_CC_STACKPROTECTOR_REGULAR is not set
+          # CONFIG_CC_STACKPROTECTOR_STRONG is not set
+          CONFIG_HAVE_CONTEXT_TRACKING=y
+          CONFIG_HAVE_VIRT_CPU_ACCOUNTING_GEN=y
+          CONFIG_HAVE_IRQ_TIME_ACCOUNTING=y
+          CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE=y
+          CONFIG_MODULES_USE_ELF_REL=y
+          CONFIG_ARCH_HAS_ELF_RANDOMIZE=y
+          CONFIG_HAVE_ARCH_MMAP_RND_BITS=y
+          CONFIG_ARCH_MMAP_RND_BITS_MIN=8
+          CONFIG_ARCH_MMAP_RND_BITS_MAX=16
+          CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN=8
+          CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX=16
+          CONFIG_HAVE_COPY_THREAD_TLS=y
+          CONFIG_CLONE_BACKWARDS=y
+          CONFIG_OLD_SIGSUSPEND3=y
+          CONFIG_OLD_SIGACTION=y
+          
+          #
+          # GCOV-based kernel profiling
+          #
+          # CONFIG_GCOV_KERNEL is not set
+          CONFIG_ARCH_HAS_GCOV_PROFILE_ALL=y
+          CONFIG_HAVE_GENERIC_DMA_COHERENT=y
+          CONFIG_SLABINFO=y
+          CONFIG_RT_MUTEXES=y
+          CONFIG_BASE_SMALL=0
+          CONFIG_MODULES=y
+          # CONFIG_MODULE_FORCE_LOAD is not set
+          CONFIG_MODULE_UNLOAD=y
+          # CONFIG_MODULE_FORCE_UNLOAD is not set
+          # CONFIG_MODVERSIONS is not set
+          # CONFIG_MODULE_SRCVERSION_ALL is not set
+          # CONFIG_MODULE_SIG is not set
+          # CONFIG_MODULE_COMPRESS is not set
+          CONFIG_BLOCK=y
+          CONFIG_LBDAF=y
+          # CONFIG_BLK_DEV_BSG is not set
+          # CONFIG_BLK_DEV_BSGLIB is not set
+          # CONFIG_BLK_DEV_INTEGRITY is not set
+          # CONFIG_BLK_CMDLINE_PARSER is not set
+          
+          #
+          # Partition Types
+          #
+          # CONFIG_PARTITION_ADVANCED is not set
+          CONFIG_MSDOS_PARTITION=y
+          CONFIG_EFI_PARTITION=y
+          
+          #
+          # IO Schedulers
+          #
+          CONFIG_IOSCHED_NOOP=y
+          # CONFIG_IOSCHED_DEADLINE is not set
+          # CONFIG_IOSCHED_CFQ is not set
+          CONFIG_DEFAULT_NOOP=y
+          CONFIG_DEFAULT_IOSCHED="noop"
+          CONFIG_PREEMPT_COUNT=y
+          CONFIG_ASN1=y
+          CONFIG_UNINLINE_SPIN_UNLOCK=y
+          CONFIG_ARCH_SUPPORTS_ATOMIC_RMW=y
+          CONFIG_MUTEX_SPIN_ON_OWNER=y
+          CONFIG_RWSEM_SPIN_ON_OWNER=y
+          CONFIG_LOCK_SPIN_ON_OWNER=y
+          CONFIG_FREEZER=y
+          
+          #
+          # System Type
+          #
+          CONFIG_MMU=y
+          CONFIG_ARCH_MULTIPLATFORM=y
+          # CONFIG_ARCH_REALVIEW is not set
+          # CONFIG_ARCH_VERSATILE is not set
+          # CONFIG_ARCH_CLPS711X is not set
+          # CONFIG_ARCH_GEMINI is not set
+          # CONFIG_ARCH_EBSA110 is not set
+          # CONFIG_ARCH_EP93XX is not set
+          # CONFIG_ARCH_FOOTBRIDGE is not set
+          # CONFIG_ARCH_NETX is not set
+          # CONFIG_ARCH_H720X is not set
+          # CONFIG_ARCH_IOP13XX is not set
+          # CONFIG_ARCH_IOP32X is not set
+          # CONFIG_ARCH_IOP33X is not set
+          # CONFIG_ARCH_IXP4XX is not set
+          # CONFIG_ARCH_DOVE is not set
+          # CONFIG_ARCH_ORION5X is not set
+          # CONFIG_ARCH_MMP is not set
+          # CONFIG_ARCH_KIRKWOOD is not set
+          # CONFIG_ARCH_MV78XX0 is not set
+          # CONFIG_ARCH_MVEBU is not set
+          # CONFIG_ARCH_KS8695 is not set
+          # CONFIG_ARCH_W90X900 is not set
+          # CONFIG_ARCH_LPC32XX is not set
+          # CONFIG_ARCH_PXA is not set
+          # CONFIG_ARCH_MSM is not set
+          # CONFIG_ARCH_SHMOBILE is not set
+          # CONFIG_ARCH_RPC is not set
+          # CONFIG_ARCH_SA1100 is not set
+          # CONFIG_ARCH_S3C24XX is not set
+          # CONFIG_ARCH_S3C64XX is not set
+          # CONFIG_ARCH_DAVINCI is not set
+          # CONFIG_ARCH_OMAP1 is not set
+          
+          #
+          # Multiple platform selection
+          #
+          
+          #
+          # CPU Core family selection
+          #
+          CONFIG_ARCH_MULTI_V6=y
+          CONFIG_ARCH_MULTI_V7=y
+          CONFIG_ARCH_MULTI_V6_V7=y
+          # CONFIG_ARCH_MULTI_CPU_AUTO is not set
+          # CONFIG_ARCH_VIRT is not set
+          # CONFIG_ARCH_MX23 is not set
+          # CONFIG_ARCH_MX28 is not set
+          # CONFIG_ARCH_MX51 is not set
+          # CONFIG_ARCH_MX53 is not set
+          # CONFIG_ARCH_MXC is not set
+          # CONFIG_ARCH_MXS is not set
+          # CONFIG_ARCH_SUNXI is not set
+          # CONFIG_ARCH_TEGRA is not set
+          # CONFIG_ARCH_U8500 is not set
+          # CONFIG_ARCH_VEXPRESS is not set
+          # CONFIG_ARCH_WM8850 is not set
+          # CONFIG_ARCH_KEYSTONE is not set
+          # CONFIG_ARCH_ROCKCHIP is not set
+          CONFIG_ARCH_ROCKCHIP=y
+          
+          #
+          # Rockchip Implementations
+          #
+          # CONFIG_ARCH_RK3036 is not set
+          # CONFIG_ARCH_RK3066 is not set
+          # CONFIG_ARCH_RK3066B is not set
+          # CONFIG_ARCH_RK3188 is not set
+          # CONFIG_ARCH_RK322X is not set
+          # CONFIG_ARCH_RK3288 is not set
+          # CONFIG_ARCH_RK3288 is not set
+          CONFIG_ARCH_RK312X=y
+          
+          #
+          # Processor Type
+          #
+          CONFIG_CPU_V7=y
+          CONFIG_CPU_32v6K=y
+          CONFIG_CPU_32v7=y
+          CONFIG_CPU_ABRT_EV7=y
+          CONFIG_CPU_PABRT_V7=y
+          CONFIG_CPU_CACHE_V7=y
+          CONFIG_CPU_CACHE_VIPT=y
+          CONFIG_CPU_COPY_V6=y
+          CONFIG_CPU_TLB_V7=y
+          CONFIG_CPU_HAS_ASID=y
+          CONFIG_CPU_CP15=y
+          CONFIG_CPU_CP15_MMU=y
+          
+          #
+          # Processor Features
+          #
+          # CONFIG_ARM_LPAE is not set
+          # CONFIG_ARCH_PHYS_ADDR_T_64BIT is not set
+          CONFIG_ARM_THUMB=y
+          # CONFIG_ARM_THUMBEE is not set
+          CONFIG_ARM_VIRT_EXT=y
+          CONFIG_SWP_EMULATE=y
+          # CONFIG_CPU_ICACHE_DISABLE is not set
+          # CONFIG_CPU_DCACHE_DISABLE is not set
+          # CONFIG_CPU_BPREDICT_DISABLE is not set
+          CONFIG_KUSER_HELPERS=y
+          CONFIG_VDSO=y
+          CONFIG_OUTER_CACHE=y
+          CONFIG_OUTER_CACHE_SYNC=y
+          CONFIG_MIGHT_HAVE_CACHE_L2X0=y
+          CONFIG_CACHE_L2X0=y
+          # CONFIG_CACHE_PL310 is not set
+          # CONFIG_CACHE_TAUROS2 is not set
+          CONFIG_ARM_L1_CACHE_SHIFT=5
+          CONFIG_ARM_DMA_MEM_BUFFERABLE=y
+          CONFIG_DEBUG_RODATA=y
+          # CONFIG_DEBUG_ALIGN_RODATA is not set
+          CONFIG_MULTI_IRQ_HANDLER=y
+          CONFIG_ARM_ARCH_TIMER=y
+          # CONFIG_ARM_ARCH_TIMER_EVTSTREAM is not set
+          # CONFIG_FIQ is not set
+          CONFIG_ARM_PSCI=y
+          # CONFIG_VMSPLIT_375G is not set
+          # CONFIG_VMSPLIT_2G is not set
+          # CONFIG_VMSPLIT_1G is not set
+          CONFIG_VMSPLIT_3G=y
+          CONFIG_PAGE_OFFSET=0xC0000000
+          CONFIG_ARCH_NR_GPIO=0
+          CONFIG_PREEMPT_NONE=y
+          # CONFIG_PREEMPT_VOLUNTARY is not set
+          # CONFIG_PREEMPT is not set
+          CONFIG_HZ_FIXED=0
+          # CONFIG_HZ_100 is not set
+          # CONFIG_HZ_200 is not set
+          # CONFIG_HZ_250 is not set
+          # CONFIG_HZ_300 is not set
+          # CONFIG_HZ_500 is not set
+          # CONFIG_HZ_1000 is not set
+          CONFIG_HZ_1024=y
+          CONFIG_HZ=1024
+          CONFIG_SCHED_HRTICK=y
+          # CONFIG_THUMB2_KERNEL is not set
+          CONFIG_ARM_PATCH_IDIV=y
+          CONFIG_AEABI=y
+          # CONFIG_OABI_COMPAT is not set
+          CONFIG_ARCH_HAS_HOLES_MEMORYMODEL=y
+          # CONFIG_ARCH_SPARSEMEM_DEFAULT is not set
+          # CONFIG_ARCH_SELECT_MEMORY_MODEL is not set
+          CONFIG_HAVE_ARCH_PFN_VALID=y
+          CONFIG_HIGHMEM=y
+          # CONFIG_HIGHPTE is not set
+          CONFIG_HW_PERF_EVENTS=y
+          CONFIG_ARCH_WANT_GENERAL_HUGETLB=y
+          # CONFIG_ARM_MODULE_PLTS is not set
+          CONFIG_FLATMEM=y
+          CONFIG_FLAT_NODE_MEM_MAP=y
+          CONFIG_HAVE_MEMBLOCK=y
+          CONFIG_NO_BOOTMEM=y
+          CONFIG_MEMORY_ISOLATION=y
+          # CONFIG_HAVE_BOOTMEM_INFO_NODE is not set
+          CONFIG_PAGEFLAGS_EXTENDED=y
+          CONFIG_SPLIT_PTLOCK_CPUS=4
+          CONFIG_COMPACTION=y
+          CONFIG_MIGRATION=y
+          # CONFIG_PHYS_ADDR_T_64BIT is not set
+          CONFIG_ZONE_DMA_FLAG=0
+          CONFIG_BOUNCE=y
+          # CONFIG_KSM is not set
+          CONFIG_DEFAULT_MMAP_MIN_ADDR=4096
+          CONFIG_ARCH_SUPPORTS_MEMORY_FAILURE=y
+          # CONFIG_MEMORY_FAILURE is not set
+          # CONFIG_TRANSPARENT_HUGEPAGE is not set
+          # CONFIG_CLEANCACHE is not set
+          # CONFIG_FRONTSWAP is not set
+          # CONFIG_CMA is not set
+          # CONFIG_ZPOOL is not set
+          # CONFIG_ZBUD is not set
+          # CONFIG_ZSMALLOC is not set
+          CONFIG_GENERIC_EARLY_IOREMAP=y
+          CONFIG_SECCOMP=y
+          CONFIG_CC_HAVE_STACKPROTECTOR_TLS=y
+          CONFIG_PARAVIRT=y
+          # CONFIG_PARAVIRT_TIME_ACCOUNTING is not set
+          # CONFIG_XEN is not set
+          
+          #
+          # Boot options
+          #
+          # CONFIG_ARM_APPENDED_DTB is not set
+          CONFIG_ARM_ATAG_DTB_COMPAT=y
+          CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_FROM_BOOTLOADER=y
+          # CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND is not set
+          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+          # CONFIG_CMDLINE_FORCE is not set
+          CONFIG_KEXEC=y
+          # CONFIG_CRASH_DUMP is not set
+          CONFIG_AUTO_ZRELADDR=y
+          
+          #
+          # CPU Power Management
+          #
+          
+          #
+          # CPU Frequency scaling
+          #
+          # CONFIG_CPU_FREQ is not set
+          
+          #
+          # CPU Idle
+          #
+          CONFIG_CPU_IDLE=y
+          # CONFIG_CPU_IDLE_GOV_LADDER is not set
+          CONFIG_CPU_IDLE_GOV_MENU=y
+          # CONFIG_ARCH_NEEDS_CPU_IDLE_COUPLED is not set
+          
+          #
+          # Floating point emulation
+          #
+          
+          #
+          # At least one emulation must be selected
+          #
+          CONFIG_FPE_NWFPE=y
+          # CONFIG_FPE_NWFPE_XP is not set
+          # CONFIG_FPE_FASTFPE is not set
+          # CONFIG_VFP is not set
+          
+          #
+          # Userspace binary formats
+          #
+          CONFIG_BINFMT_ELF=y
+          CONFIG_ELF_CORE=y
+          # CONFIG_CORE_DUMP_DEFAULT_ELF_HEADERS is not set
+          CONFIG_BINFMT_SCRIPT=y
+          # CONFIG_HAVE_AOUT is not set
+          CONFIG_BINFMT_MISC=y
+          # CONFIG_COREDUMP is not set
+          
+          #
+          # Power management options
+          #
+          # CONFIG_SUSPEND is not set
+          # CONFIG_PM is not set
+          CONFIG_PM_OPP=y
+          # CONFIG_PM_CLK is not set
+          CONFIG_ARCH_SUSPEND_POSSIBLE=y
+          CONFIG_ARM_CPU_SUSPEND=y
+          CONFIG_NET=y
+          
+          #
+          # Networking options
+          #
+          CONFIG_PACKET=y
+          # CONFIG_PACKET_DIAG is not set
+          CONFIG_UNIX=y
+          # CONFIG_UNIX_DIAG is not set
+          CONFIG_XFRM=y
+          # CONFIG_XFRM_USER is not set
+          # CONFIG_XFRM_SUB_POLICY is not set
+          # CONFIG_XFRM_MIGRATE is not set
+          # CONFIG_XFRM_STATISTICS is not set
+          # CONFIG_NET_KEY is not set
+          CONFIG_INET=y
+          # CONFIG_IP_MULTICAST is not set
+          # CONFIG_IP_ADVANCED_ROUTER is not set
+          CONFIG_IP_PNP=y
+          # CONFIG_IP_PNP_DHCP is not set
+          # CONFIG_IP_PNP_BOOTP is not set
+          # CONFIG_IP_PNP_RARP is not set
+          # CONFIG_NET_IPIP is not set
+          # CONFIG_NET_IPGRE_DEMUX is not set
+          # CONFIG_NET_IP_TUNNEL is not set
+          # CONFIG_IP_MROUTE is not set
+          # CONFIG_SYN_COOKIES is not set
+          # CONFIG_NET_IPVTI is not set
+          # CONFIG_INET_AH is not set
+          # CONFIG_INET_ESP is not set
+          # CONFIG_INET_IPCOMP is not set
+          # CONFIG_INET_XFRM_TUNNEL is not set
+          # CONFIG_INET_TUNNEL is not set
+          # CONFIG_INET_XFRM_MODE_TRANSPORT is not set
+          # CONFIG_INET_XFRM_MODE_TUNNEL is not set
+          # CONFIG_INET_XFRM_MODE_BEET is not set
+          # CONFIG_INET_DIAG is not set
+          # CONFIG_TCP_CONG_ADVANCED is not set
+          CONFIG_TCP_CONG_CUBIC=y
+          CONFIG_DEFAULT_TCP_CONG="cubic"
+          # CONFIG_TCP_MD5SIG is not set
+          # CONFIG_IPV6 is not set
+          # CONFIG_NETWORK_SECMARK is not set
+          # CONFIG_NET_PTP_CLASSIFY is not set
+          # CONFIG_NETWORK_PHY_TIMESTAMPING is not set
+          # CONFIG_NETFILTER is not set
+          # CONFIG_IP_DCCP is not set
+          # CONFIG_IP_SCTP is not set
+          # CONFIG_RDS is not set
+          # CONFIG_TIPC is not set
+          # CONFIG_ATM is not set
+          # CONFIG_L2TP is not set
+          # CONFIG_BRIDGE is not set
+          # CONFIG_HAVE_NET_DSA is not set
+          # CONFIG_VLAN_8021Q is not set
+          # CONFIG_DECNET is not set
+          # CONFIG_LLC2 is not set
+          # CONFIG_IPX is not set
+          # CONFIG_ATALK is not set
+          # CONFIG_X25 is not set
+          # CONFIG_LAPB is not set
+          # CONFIG_PHONET is not set
+          # CONFIG_IEEE802154 is not set
+          # CONFIG_NET_SCHED is not set
+          # CONFIG_DCB is not set
+          # CONFIG_BATMAN_ADV is not set
+          # CONFIG_OPENVSWITCH is not set
+          # CONFIG_VSOCKETS is not set
+          # CONFIG_NETLINK_MMAP is not set
+          # CONFIG_NETLINK_DIAG is not set
+          # CONFIG_MPLS is not set
+          # CONFIG_HSR is not set
+          # CONFIG_CGROUP_NET_PRIO is not set
+          # CONFIG_NET_RX_BUSY_POLL is not set
+          CONFIG_BQL=y
+          
+          #
+          # Network testing
+          #
+          # CONFIG_NET_PKTGEN is not set
+          # CONFIG_HAMRADIO is not set
+          # CONFIG_CAN is not set
+          # CONFIG_IRDA is not set
+          # CONFIG_BT is not set
+          # CONFIG_AF_RXRPC is not set
+          # CONFIG_WIRELESS is not set
+          # CONFIG_WIMAX is not set
+          # CONFIG_RFKILL is not set
+          # CONFIG_NET_9P is not set
+          # CONFIG_CAIF is not set
+          # CONFIG_CEPH_LIB is not set
+          # CONFIG_NFC is not set
+          # CONFIG_LWTUNNEL is not set
+          # CONFIG_DST_CACHE is not set
+          # CONFIG_MPLS_ROUTING is not set
+          # CONFIG_MPLS_IPTUNNEL is not set
+          
+          #
+          # Device Drivers
+          #
+          
+          #
+          # Generic Driver Options
+          #
+          CONFIG_UEVENT_HELPER=y
+          CONFIG_UEVENT_HELPER_PATH=""
+          CONFIG_DEVTMPFS=y
+          # CONFIG_DEVTMPFS_MOUNT is not set
+          CONFIG_STANDALONE=y
+          CONFIG_PREVENT_FIRMWARE_BUILD=y
+          CONFIG_FW_LOADER=y
+          # CONFIG_FIRMWARE_IN_KERNEL is not set
+          CONFIG_EXTRA_FIRMWARE=""
+          # CONFIG_FW_LOADER_USER_HELPER_FALLBACK is not set
+          CONFIG_ALLOW_DEV_COREDUMP=y
+          # CONFIG_DEBUG_DRIVER is not
