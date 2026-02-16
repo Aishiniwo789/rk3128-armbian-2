@@ -47,28 +47,28 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with ARM32 fixes and BTRFS disabled ====="
+          echo "===== 3. Creating family config with BTRFS forcefully disabled ====="
           mkdir -p userpatches/config/sources/families
-          # 创建包含必要编译器标志和内核配置选项的家族配置文件
+          # 创建家族配置文件，重点是禁用BTRFS
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration with ARM32 fixes
+          # Rockchip RK3128 family configuration
           
           # Source the common rockchip configuration if it exists
           source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
           
-          # Explicitly set kernel version for legacy branch
+          # Explicitly set kernel version for legacy branch (required)
           KERNEL_MAJOR_MINOR="4.4"
           
           # Add compiler flags to help with ARM32 builds
           KCFLAGS="${KCFLAGS} -mno-unaligned-access"
           
-          # Disable BTRFS which causes __aeabi_uldivmod link errors on ARM32
+          # CRITICAL: Disable BTRFS which causes __aeabi_uldivmod link errors on ARM32
+          # This uses the kernel config fragment mechanism to ensure BTRFS is off
           KERNEL_CONFIGURE_EXTRA_ARGS="--disable CONFIG_BTRFS_FS"
           
-          # Family tweaks function
+          # Family tweaks function (required)
           family_tweaks() {
-            # Additional kernel config tweaks can be added here
-            :
+            : # No tweaks needed for basic functionality
           }
           EOF
           echo "✅ Family config created:"
