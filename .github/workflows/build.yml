@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and apply source-level patches via hook
+      - name: Fix nested structure and deploy stable kernel + patch strategy
         working-directory: armbian-build
         run: |
           set -e
@@ -43,76 +43,89 @@ jobs:
           BRANCH="legacy"
           KERNEL_TARGET="legacy"
           EOF
-          echo "✅ Board config created at userpatches/boards/rk3128-box.conf"
-          cat userpatches/boards/rk3128-box.conf
+          echo "✅ Board config created"
           echo ""
 
-          echo "===== 3. Creating minimal family config ====="
+          echo "===== 3. Creating family config to use STABLE KERNEL ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - minimal
+          # Rockchip RK3128 family configuration - using stable kernel
+          
+          # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
+          
+          # Use official stable kernel tree
+          KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+          KERNELBRANCH="branch:linux-4.4.y"
+          
+          # U-Boot settings - use mainline u-boot with v2017.09 tag
+          BOOTSOURCE="https://github.com/u-boot/u-boot.git"
+          BOOTBRANCH="tag:v2017.09"
+          BOOTPATCHDIR="v2017.09"
+          
+          # Family tweaks function (required)
           family_tweaks() { :; }
           EOF
-          echo "✅ Family config created"
+          echo "✅ Family config created (using stable kernel)"
+          cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating custom kernel config hook to APPLY KERNEL PATCHES ====="
-          mkdir -p userpatches/lib/functions
-          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
-          function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Will apply BTRFS source patches" "info"
-          }
-
-          function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用
-              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "Custom kernel config" "Applying Arnd Bergmann's static inline patch to super.c" "info"
-                  
-                  # 定义补丁内容：将 super.c 中的两个关键函数改为 static inline
-                  # 这是基于 2018 年 Arnd Bergmann 的修复方案 [citation:5]
-                  PATCH_FILE="${kerneldir}/fs/btrfs/super.c"
-                  if [[ -f "$PATCH_FILE" ]]; then
-                      # 备份原文件
-                      cp "$PATCH_FILE" "${PATCH_FILE}.bak"
-                      
-                      # 应用补丁：将 btrfs_cmp_device_free_bytes 和 btrfs_calc_avail_data_space 改为 static inline
-                      sed -i 's/^static int btrfs_cmp_device_free_bytes/static inline int btrfs_cmp_device_free_bytes/' "$PATCH_FILE"
-                      sed -i 's/^static int btrfs_calc_avail_data_space/static inline int btrfs_calc_avail_data_space/' "$PATCH_FILE"
-                      
-                      display_alert "Patched super.c" "Functions changed to static inline" "info"
-                      
-                      # 可选：也可以尝试将其他地方的 '/' 除法改为 do_div() [citation:7]
-                      # 但这更复杂，先应用最直接的 static inline 方案
-                  else
-                      display_alert "super.c not found!" "BTRFS source structure unexpected" "err"
-                  fi
-                  
-                  # 再次确保 .config 中相关选项被禁用，作为保险
-                  if [[ -f .config ]]; then
-                      sed -i '/CONFIG_BTRFS_FS/d' .config
-                      echo "# CONFIG_BTRFS_FS is not set" >> .config
-                      make ARCH=arm olddefconfig
-                  fi
-              else
-                  display_alert "BTRFS source directory not found" "Maybe already removed?" "debug"
-              fi
-          }
+          echo "===== 4. Providing kernel config file in the CORRECT location ====="
+          # 确保文件在 userpatches/ 根目录下，这是 Armbian 查找用户配置的地方
+          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
+          # 内核配置文件 - 用于 Rockchip RK3128, 基于 linux-4.4.y
+          # 这是一个基础的配置，您可以根据需要添加更多选项
+          
+          # 架构
+          CONFIG_ARM=y
+          CONFIG_ARCH_ROCKCHIP=y
+          CONFIG_ARCH_RK312X=y
+          
+          # 必要的文件系统
+          CONFIG_EXT4_FS=y
+          # CONFIG_BTRFS_FS is not set  (明确禁用 Btrfs)
+          CONFIG_BTRFS_FS=n
+          
+          # 其他必要选项 (可以后续根据需要添加)
+          CONFIG_AEABI=y
+          CONFIG_FRAME_POINTER=y
+          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
-          echo "✅ Custom kernel config hook created (with source patching)"
-          cat userpatches/lib/functions/custom_kernel_config.sh
+          echo "✅ Kernel config created at userpatches/linux-rk3128-legacy.config"
+          cat userpatches/linux-rk3128-legacy.config
           echo ""
 
-          echo "===== 5. Copying board and family configs to official paths ====="
+          echo "===== 5. Preparing RK3128 kernel patches directory ====="
+          # 创建补丁目录，Armbian 会自动应用 userpatches/kernel/ 下的补丁
+          mkdir -p userpatches/kernel/rk3128-4.4
+          
+          # 示例：创建设备树补丁 (如果需要)
+          # cat > userpatches/kernel/rk3128-4.4/add-rk3128-box-dts.patch << 'EOF'
+          # --- a/arch/arm/boot/dts/Makefile
+          # +++ b/arch/arm/boot/dts/Makefile
+          # @@ -XX,XX +XX,XX @@ dtb-$(CONFIG_ARCH_ROCKCHIP) += \
+          #         rk3288-xxx.dtb \
+          # +       rk3128-box.dtb \
+          #         rk3xxx-xxx.dtb
+          # EOF
+          
+          echo "✅ Kernel patches directory created at userpatches/kernel/rk3128-4.4/"
+          echo ""
+
+          echo "===== 6. Copying board and family configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          # 注意：不复制 kernel config，让 Armbian 自动在 userpatches/ 中查找
           echo "✅ Board and family configs copied."
+          ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 6. Final verification ====="
+          echo "===== 7. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Custom hook (with patching): $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
+          echo "Kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Patches dir: $(ls -la userpatches/kernel/ 2>/dev/null || echo 'No patches yet')"
           echo ""
 
       - name: Install dependencies
