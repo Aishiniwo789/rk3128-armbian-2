@@ -1,4 +1,4 @@
-name: Build Armbian for RK3128 - New Approach
+name: Build Armbian for RK3128 - Using Firefly kernel
 
 on:
   workflow_dispatch:
@@ -21,18 +21,18 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Prepare clean configuration and patches
+      - name: Prepare clean configuration
         working-directory: armbian-build
         run: |
           set -e
-          echo "===== [1/6] Fixing possible nested userpatches ====="
+          echo "===== [1/5] Fixing possible nested userpatches ====="
           if [ -d "userpatches/userpatches" ]; then
             mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
             mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
             rmdir userpatches/userpatches 2>/dev/null || true
           fi
           
-          echo "===== [2/6] Creating board config (minimal) ====="
+          echo "===== [2/5] Creating board config (minimal) ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -42,22 +42,22 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
           
-          echo "===== [3/6] Creating family config (Rockchip BSP kernel) ====="
+          echo "===== [3/5] Creating family config (Firefly kernel) ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family - using Rockchip's BSP kernel
+          # Rockchip RK3128 family - using Firefly kernel (verified to work)
           KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
-          KERNELBRANCH="branch:rk312x-4.4"
+          KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"
+          # 不指定KERNELBRANCH，让系统拉取默认分支
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
           family_tweaks() { :; }
           EOF
           
-          echo "===== [4/6] Providing kernel config file (BTRFS explicitly disabled) ====="
+          echo "===== [4/5] Providing kernel config file (BTRFS explicitly disabled) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # Rockchip RK3128 BSP kernel configuration
+          # Kernel config for RK3128 with Firefly source
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
           CONFIG_ARCH_RK312X=y
@@ -68,11 +68,10 @@ jobs:
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
           
-          echo "===== [5/6] Creating post-build hook to install CUPS ====="
+          echo "===== [5/5] Creating post-build hook to install CUPS ====="
           mkdir -p userpatches/overlay
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
-          # Post-build customization script
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y cups cups-client cups-filters printer-driver-all hplip network-manager
@@ -84,12 +83,6 @@ jobs:
           apt-get clean
           EOF
           chmod +x userpatches/customize-image.sh
-          
-          echo "===== [6/6] Copying essential configs to official paths ====="
-          mkdir -p config/boards config/sources/families
-          cp userpatches/boards/rk3128-box.conf config/boards/
-          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          # Kernel config is picked up automatically from userpatches/
 
       - name: Install host dependencies
         run: |
@@ -102,7 +95,7 @@ jobs:
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with Rockchip BSP kernel
+      - name: Build Armbian with Firefly kernel
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
