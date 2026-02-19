@@ -55,9 +55,9 @@ jobs:
           # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
           
-          # Use Rockchip BSP kernel source
-          KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
-          KERNELBRANCH="branch:rk312x-4.4"
+          # 换回之前能成功拉取的官方稳定内核
+          KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+          KERNELBRANCH="branch:linux-4.4.y"
           
           # U-Boot settings
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
