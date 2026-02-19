@@ -47,29 +47,36 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with compiler flags for ARM32 ====="
+          echo "===== 3. Creating family config with GLOBAL compiler flags ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration with ARM32 compiler flags
-            
-          # Source the common rockchip configuration if it exists
-          source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
+          # Rockchip RK3128 family configuration with GLOBAL compiler flags
             
           # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
-            
-          # Add compiler flags to fix ARM32 divmod issues
-          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
           
-          # Add libgcc link flag to resolve __aeabi_uldivmod
+          # Use Rockchip BSP kernel source
+          KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
+          KERNELBRANCH="branch:rk312x-4.4"
+          
+          # U-Boot settings
+          BOOTSOURCE="https://github.com/u-boot/u-boot.git"
+          BOOTBRANCH="tag:v2017.09"
+          BOOTPATCHDIR="v2017.09"
+          
+          # GLOBAL compiler flags for all modules
+          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
+          KCFLAGS="${KCFLAGS} -march=armv7-a -mfloat-abi=hard"
+          
+          # Add libgcc globally to resolve __aeabi_uldivmod for ALL modules
           LDFLAGS="${LDFLAGS} -lgcc"
             
           # Family tweaks function
           family_tweaks() {
-            : # No tweaks needed for basic functionality
+            : # No tweaks needed
           }
           EOF
-          echo "✅ Family config created:"
+          echo "✅ Family config created with GLOBAL flags:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
@@ -90,44 +97,7 @@ jobs:
           ls -la userpatches/config/kernel/
           echo ""
 
-          echo "===== 6. Creating SIMPLIFIED kernel patch for Btrfs ====="
-          mkdir -p userpatches/kernel/archive/rk3128-4.4
-          
-          # 使用更简单的补丁格式，只添加行而不依赖上下文
-          cat > userpatches/kernel/archive/rk3128-4.4/0001-btrfs-add-libgcc.patch << 'EOF'
-          --- a/fs/btrfs/Makefile
-          +++ b/fs/btrfs/Makefile
-          @@ -26,0 +27,3 @@
-          +
-          +# Fix ARM32 __aeabi_uldivmod undefined reference
-          +KBUILD_LDFLAGS += -lgcc
-          EOF
-          echo "✅ Simplified kernel patch created"
-          ls -la userpatches/kernel/archive/rk3128-4.4/
-          echo ""
-
-          echo "===== 7. Creating DEBUG script to verify patch application ====="
-          mkdir -p userpatches/lib/functions
-          cat > userpatches/lib/functions/debug.sh << 'EOF'
-          function extension_prepare_config__debug() {
-              display_alert "DEBUG: Checking patch application" "rk3128" "info"
-              
-              # 在内核源码准备好后检查补丁是否应用
-              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  if [[ -f "${kerneldir}/fs/btrfs/Makefile" ]]; then
-                      if grep -q "KBUILD_LDFLAGS += -lgcc" "${kerneldir}/fs/btrfs/Makefile"; then
-                          display_alert "✅ DEBUG: libgcc link found in Makefile" "Btrfs patch applied" "info"
-                      else
-                          display_alert "❌ DEBUG: libgcc link NOT found" "Btrfs patch missing" "err"
-                      fi
-                  fi
-              fi
-          }
-          EOF
-          echo "✅ Debug script created"
-          echo ""
-
-          echo "===== 8. Creating CUPS install script ====="
+          echo "===== 6. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -143,7 +113,7 @@ jobs:
           chmod +x userpatches/customize-image.sh
           echo "✅ CUPS install script created"
 
-          echo "===== 9. Copying configs to official paths ====="
+          echo "===== 7. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families config/kernel
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -152,11 +122,10 @@ jobs:
           ls -la config/boards/ config/sources/families/ config/kernel/
           echo ""
 
-          echo "===== 10. Final verification ====="
+          echo "===== 8. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "Kernel fragment: $(ls -la config/kernel/linux-rk3128-legacy.fragment 2>/dev/null || echo 'Not found')"
-          echo "Kernel patch: $(ls -la userpatches/kernel/archive/rk3128-4.4/0001-btrfs-add-libgcc.patch 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
@@ -166,7 +135,7 @@ jobs:
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian
+      - name: Build Armbian with GLOBAL compiler flags
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
