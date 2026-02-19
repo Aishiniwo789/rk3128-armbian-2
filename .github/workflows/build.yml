@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide all configs
+      - name: Fix nested structure and provide all configs with BTRFS completely disabled
         working-directory: armbian-build
         run: |
           set -e
@@ -64,9 +64,42 @@ jobs:
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating user kernel config to try disabling BTRFS ====="
+          echo "===== 4. Creating user kernel config to COMPLETELY DISABLE BTRFS ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # 用户提供的内核配置文件 - 尝试禁用 BTRFS
+          # 用户提供的内核配置文件 - 基于ARM 32-bit上Btrfs的历史问题完全禁用它
+          
+          # 核心：完全禁用 Btrfs 文件系统（不构建为模块，也不内置）
+          CONFIG_BTRFS_FS=n
+          
+          # 明确禁用所有相关的 Btrfs 特性
+          CONFIG_BTRFS_FS_POSIX_ACL=n
+          CONFIG_BTRFS_FS_CHECK_INTEGRITY=n
+          CONFIG_BTRFS_FS_RUN_SANITY_TESTS=n
+          CONFIG_BTRFS_DEBUG=n
+          CONFIG_BTRFS_ASSERT=n
+          CONFIG_BTRFS_FS_REF_VERIFY=n
+          
+          # 确保其他可能依赖 Btrfs 的选项也被禁用
+          CONFIG_BTRFS_FS_STATS=n
+          CONFIG_BTRFS_FS_REPORT_LOGICAL_ADDRESS=n
+          CONFIG_BTRFS_FS_SUBVOL_SYSFS=n
+          CONFIG_BTRFS_FS_HAS_SUBVOLUME=n
+          CONFIG_BTRFS_FS_HAS_CSUM=n
+          
+          # 明确禁止将 Btrfs 编译为模块（双重保险）
+          # CONFIG_BTRFS_FS is not set
+          # CONFIG_BTRFS_FS_MODULE is not set
+          EOF
+          echo "✅ User kernel config created at userpatches/linux-rk3128-legacy.config"
+          cat userpatches/linux-rk3128-legacy.config
+          echo ""
+
+          echo "===== 5. Creating a kernel config fragment for additional safety ====="
+          mkdir -p userpatches/config/kernel
+          cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
+          # 内核配置片段 - 确保 Btrfs 完全禁用
+          
+          # 明确禁用 Btrfs 及其所有相关选项
           CONFIG_BTRFS_FS=n
           CONFIG_BTRFS_FS_POSIX_ACL=n
           CONFIG_BTRFS_FS_CHECK_INTEGRITY=n
@@ -74,40 +107,52 @@ jobs:
           CONFIG_BTRFS_DEBUG=n
           CONFIG_BTRFS_ASSERT=n
           EOF
-          echo "✅ User kernel config created at userpatches/linux-rk3128-legacy.config"
+          echo "✅ Kernel config fragment created"
           echo ""
 
-          echo "===== 5. Creating custom kernel config hook to FORCE REMOVE BTRFS ====="
+          echo "===== 6. Creating custom kernel config hook as ultimate safeguard ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Will force remove BTRFS source" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Final BTRFS disable check" "info"
           }
 
           function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用，此时我们可以操作源码目录
-              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "Custom kernel config" "Forcefully removing BTRFS source directory" "wrn"
-                  # 直接删除Btrfs源码目录，使其完全不参与编译
-                  rm -rf "${kerneldir}/fs/btrfs"
-                  display_alert "BTRFS source directory removed" "BTRFS will not be built" "info"
+              # 此钩子在内核配置流程的最后阶段被调用
+              if [[ -f .config ]]; then
+                  display_alert "Custom kernel config" "Performing final check for BTRFS" "info"
                   
-                  # 同时，再次确保 .config 中相关选项被禁用
-                  if [[ -f .config ]]; then
+                  # 检查并确保 BTRFS 被完全禁用
+                  if grep -q "CONFIG_BTRFS_FS=y" .config || grep -q "CONFIG_BTRFS_FS=m" .config; then
+                      display_alert "WARNING: BTRFS still enabled in final config, forcing disable" "BTRFS" "wrn"
+                      # 直接修改 .config 文件
                       sed -i '/CONFIG_BTRFS_FS/d' .config
                       echo "# CONFIG_BTRFS_FS is not set" >> .config
+                      sed -i '/CONFIG_BTRFS_FS_POSIX_ACL/d' .config
+                      echo "# CONFIG_BTRFS_FS_POSIX_ACL is not set" >> .config
+                      sed -i '/CONFIG_BTRFS_FS_CHECK_INTEGRITY/d' .config
+                      echo "# CONFIG_BTRFS_FS_CHECK_INTEGRITY is not set" >> .config
+                      
+                      # 运行 olddefconfig 使修改生效并解决依赖关系
                       make ARCH=arm olddefconfig
+                      display_alert "BTRFS forcibly disabled in final config" "BTRFS" "info"
+                  else
+                      display_alert "BTRFS already disabled in final config" "BTRFS" "ok"
                   fi
-              else
-                  display_alert "BTRFS source directory not found" "Maybe already removed?" "debug"
+                  
+                  # 最终验证
+                  if grep -q "CONFIG_BTRFS_FS=y\|CONFIG_BTRFS_FS=m" .config; then
+                      display_alert "ERROR: Failed to disable BTRFS" "BTRFS" "err"
+                  else
+                      display_alert "Verified: BTRFS is completely disabled" "BTRFS" "ok"
+                  fi
               fi
           }
           EOF
-          echo "✅ Custom kernel config hook created (with source removal)"
-          cat userpatches/lib/functions/custom_kernel_config.sh
+          echo "✅ Custom kernel config hook created"
           echo ""
 
-          echo "===== 6. Copying board and family configs to official paths ====="
+          echo "===== 7. Copying board and family configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -115,11 +160,10 @@ jobs:
           ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 7. Final verification ====="
+          echo "===== 8. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
-          echo "Custom hook (with removal): $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
