@@ -65,16 +65,13 @@ jobs:
           echo ""
 
           echo "===== 4. Creating user kernel config to COMPLETELY DISABLE BTRFS ====="
-          # 根据官方文档，用户内核配置文件应直接放在 userpatches/ 根目录下
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # 用户提供的内核配置文件 - 完全禁用 BTRFS
-          # 基于 ARM 32-bit 上 Btrfs 的已知问题
+          # 用户提供的内核配置文件 - 基于ARM 32-bit上Btrfs的历史问题完全禁用它
           
           # 核心：完全禁用 Btrfs 文件系统（不构建为模块，也不内置）
           CONFIG_BTRFS_FS=n
           
-          # 明确禁用所有相关的 Btrfs 特性，确保不会意外启用
-          # 这些选项可能依赖 CONFIG_BTRFS_FS，但为了安全起见全部禁用
+          # 明确禁用所有相关的 Btrfs 特性
           CONFIG_BTRFS_FS_POSIX_ACL=n
           CONFIG_BTRFS_FS_CHECK_INTEGRITY=n
           CONFIG_BTRFS_FS_RUN_SANITY_TESTS=n
@@ -83,7 +80,6 @@ jobs:
           CONFIG_BTRFS_FS_REF_VERIFY=n
           
           # 确保其他可能依赖 Btrfs 的选项也被禁用
-          # 这些选项可能在默认配置中被启用
           CONFIG_BTRFS_FS_STATS=n
           CONFIG_BTRFS_FS_REPORT_LOGICAL_ADDRESS=n
           CONFIG_BTRFS_FS_SUBVOL_SYSFS=n
@@ -102,7 +98,6 @@ jobs:
           mkdir -p userpatches/config/kernel
           cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
           # 内核配置片段 - 确保 Btrfs 完全禁用
-          # 这个片段会在内核配置流程中被合并
           
           # 明确禁用 Btrfs 及其所有相关选项
           CONFIG_BTRFS_FS=n
@@ -112,7 +107,7 @@ jobs:
           CONFIG_BTRFS_DEBUG=n
           CONFIG_BTRFS_ASSERT=n
           EOF
-          echo "✅ Kernel config fragment created at userpatches/config/kernel/linux-rk3128-legacy.fragment"
+          echo "✅ Kernel config fragment created"
           echo ""
 
           echo "===== 6. Creating custom kernel config hook as ultimate safeguard ====="
@@ -137,12 +132,6 @@ jobs:
                       echo "# CONFIG_BTRFS_FS_POSIX_ACL is not set" >> .config
                       sed -i '/CONFIG_BTRFS_FS_CHECK_INTEGRITY/d' .config
                       echo "# CONFIG_BTRFS_FS_CHECK_INTEGRITY is not set" >> .config
-                      sed -i '/CONFIG_BTRFS_FS_RUN_SANITY_TESTS/d' .config
-                      echo "# CONFIG_BTRFS_FS_RUN_SANITY_TESTS is not set" >> .config
-                      sed -i '/CONFIG_BTRFS_DEBUG/d' .config
-                      echo "# CONFIG_BTRFS_DEBUG is not set" >> .config
-                      sed -i '/CONFIG_BTRFS_ASSERT/d' .config
-                      echo "# CONFIG_BTRFS_ASSERT is not set" >> .config
                       
                       # 运行 olddefconfig 使修改生效并解决依赖关系
                       make ARCH=arm olddefconfig
@@ -160,14 +149,13 @@ jobs:
               fi
           }
           EOF
-          echo "✅ Custom kernel config hook created at userpatches/lib/functions/custom_kernel_config.sh"
+          echo "✅ Custom kernel config hook created"
           echo ""
 
           echo "===== 7. Copying board and family configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          # 注意：不复制内核配置文件到 config/kernel/，让 Armbian 自动在 userpatches/ 中查找
           echo "✅ Board and family configs copied."
           ls -la config/boards/ config/sources/families/
           echo ""
@@ -176,8 +164,6 @@ jobs:
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
-          echo "Kernel fragment: $(ls -la userpatches/config/kernel/linux-rk3128-legacy.fragment 2>/dev/null || echo 'Not found')"
-          echo "Custom hook: $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
