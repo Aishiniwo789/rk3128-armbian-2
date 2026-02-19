@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and apply authoritative BTRFS patch
+      - name: Fix nested structure and deploy ULTIMATE BTRFS REMOVAL strategy
         working-directory: armbian-build
         run: |
           set -e
@@ -50,41 +50,24 @@ jobs:
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           # Rockchip RK3128 family configuration - using stable kernel
-          
-          # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
-          
-          # Use official stable kernel tree
           KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
           KERNELBRANCH="branch:linux-4.4.y"
-          
-          # U-Boot settings - use mainline u-boot with v2017.09 tag
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          
-          # Family tweaks function (required)
           family_tweaks() { :; }
           EOF
           echo "✅ Family config created (using stable kernel)"
-          cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
           echo "===== 4. Providing kernel config file ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # 内核配置文件 - 用于 Rockchip RK3128, 基于 linux-4.4.y
-          
-          # 架构
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
           CONFIG_ARCH_RK312X=y
-          
-          # 必要的文件系统
           CONFIG_EXT4_FS=y
-          # CONFIG_BTRFS_FS is not set (明确禁用 Btrfs)
-          CONFIG_BTRFS_FS=n
-          
-          # 其他必要选项
+          CONFIG_BTRFS_FS=n   # 明确禁用 Btrfs (作为配置层面的保险)
           CONFIG_AEABI=y
           CONFIG_FRAME_POINTER=y
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
@@ -92,54 +75,35 @@ jobs:
           echo "✅ Kernel config created"
           echo ""
 
-          echo "===== 5. Creating custom kernel config hook to apply AUTHORITATIVE BTRFS PATCH ====="
+          echo "===== 5. Creating custom kernel config hook to FORCE REMOVE BTRFS SOURCE ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Will apply authoritative BTRFS patch" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Will force remove BTRFS source" "info"
           }
 
           function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用
+              # 此钩子在源码准备好后被调用，此时我们可以操作源码目录
               if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "Custom kernel config" "Applying Arnd Bergmann's authoritative patch to super.c" "info"
-                  
-                  # 定义补丁内容：将 super.c 中的两个关键函数改为 static inline
-                  # 这是基于 2018 年 Arnd Bergmann 提交并被主线合并的修复方案
-                  # 参考: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7e17916b3579
-                  PATCH_FILE="${kerneldir}/fs/btrfs/super.c"
-                  if [[ -f "$PATCH_FILE" ]]; then
-                      # 备份原文件
-                      cp "$PATCH_FILE" "${PATCH_FILE}.bak"
-                      
-                      # 应用补丁：将 btrfs_cmp_device_free_bytes 和 btrfs_calc_avail_data_space 改为 static inline
-                      # 这是内核开发者验证过的权威修复
-                      display_alert "Patching super.c" "Changing functions to static inline" "info"
-                      sed -i 's/^static int btrfs_cmp_device_free_bytes/static inline int btrfs_cmp_device_free_bytes/' "$PATCH_FILE"
-                      sed -i 's/^static int btrfs_calc_avail_data_space/static inline int btrfs_calc_avail_data_space/' "$PATCH_FILE"
-                      
-                      # 验证补丁是否应用成功
-                      if grep -q "static inline.*btrfs_cmp_device_free_bytes" "$PATCH_FILE"; then
-                          display_alert "Patch applied successfully" "btrfs_cmp_device_free_bytes is now static inline" "info"
-                      else
-                          display_alert "Patch may have failed" "btrfs_cmp_device_free_bytes not found as static inline" "wrn"
-                      fi
-                  else
-                      display_alert "super.c not found!" "BTRFS source structure unexpected" "err"
-                  fi
-                  
-                  # 再次确保 .config 中相关选项被禁用，作为保险
-                  if [[ -f .config ]]; then
-                      sed -i '/CONFIG_BTRFS_FS/d' .config
-                      echo "# CONFIG_BTRFS_FS is not set" >> .config
-                      make ARCH=arm olddefconfig
-                  fi
+                  display_alert "Custom kernel config" "Forcefully removing BTRFS source directory" "wrn"
+                  # 直接删除Btrfs源码目录，使其完全不参与编译
+                  rm -rf "${kerneldir}/fs/btrfs"
+                  display_alert "BTRFS source directory removed" "BTRFS will not be built" "info"
               else
                   display_alert "BTRFS source directory not found" "Maybe already removed?" "debug"
               fi
+              
+              # 同时，再次确保 .config 中相关选项被禁用
+              if [[ -f .config ]]; then
+                  display_alert "Custom kernel config" "Ensuring BTRFS is disabled in .config" "info"
+                  sed -i '/CONFIG_BTRFS_FS/d' .config
+                  echo "# CONFIG_BTRFS_FS is not set" >> .config
+                  # 运行 olddefconfig 使修改生效并解决依赖关系
+                  make ARCH=arm olddefconfig
+              fi
           }
           EOF
-          echo "✅ Custom kernel config hook created (with authoritative patch)"
+          echo "✅ Custom kernel config hook created (with source removal)"
           cat userpatches/lib/functions/custom_kernel_config.sh
           echo ""
 
@@ -154,7 +118,7 @@ jobs:
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
           echo "Kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
-          echo "Custom hook: $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
+          echo "Custom hook (with removal): $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
