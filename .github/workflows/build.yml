@@ -21,18 +21,16 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and deploy ULTIMATE BTRFS REMOVAL strategy
+      - name: Fix nested structure and deploy FINAL SOLUTION
         working-directory: armbian-build
         run: |
           set -e
           echo "===== 1. Fixing possible nested userpatches ====="
           if [ -d "userpatches/userpatches" ]; then
-            echo "Fixing nested userpatches..."
             mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
             mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
             rmdir userpatches/userpatches 2>/dev/null || true
           fi
-          echo ""
 
           echo "===== 2. Creating board config ====="
           mkdir -p userpatches/boards
@@ -43,13 +41,11 @@ jobs:
           BRANCH="legacy"
           KERNEL_TARGET="legacy"
           EOF
-          echo "✅ Board config created"
-          echo ""
 
-          echo "===== 3. Creating family config to use STABLE KERNEL ====="
+          echo "===== 3. Creating family config with STABLE KERNEL ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - using stable kernel
+          # Rockchip RK3128 family configuration
           KERNEL_MAJOR_MINOR="4.4"
           KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
           KERNELBRANCH="branch:linux-4.4.y"
@@ -58,8 +54,6 @@ jobs:
           BOOTPATCHDIR="v2017.09"
           family_tweaks() { :; }
           EOF
-          echo "✅ Family config created (using stable kernel)"
-          echo ""
 
           echo "===== 4. Providing kernel config file ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
@@ -67,59 +61,67 @@ jobs:
           CONFIG_ARCH_ROCKCHIP=y
           CONFIG_ARCH_RK312X=y
           CONFIG_EXT4_FS=y
-          CONFIG_BTRFS_FS=n   # 明确禁用 Btrfs (作为配置层面的保险)
+          CONFIG_BTRFS_FS=n
           CONFIG_AEABI=y
           CONFIG_FRAME_POINTER=y
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
-          echo "✅ Kernel config created"
-          echo ""
 
-          echo "===== 5. Creating custom kernel config hook to FORCE REMOVE BTRFS SOURCE ====="
+          echo "===== 5. Creating kernel config hook with MULTI-LAYER PROTECTION ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Will force remove BTRFS source" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Deploying multi-layer BTRFS protection" "info"
           }
 
           function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用，此时我们可以操作源码目录
               if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "Custom kernel config" "Forcefully removing BTRFS source directory" "wrn"
-                  # 直接删除Btrfs源码目录，使其完全不参与编译
-                  rm -rf "${kerneldir}/fs/btrfs"
-                  display_alert "BTRFS source directory removed" "BTRFS will not be built" "info"
-              else
-                  display_alert "BTRFS source directory not found" "Maybe already removed?" "debug"
+                  display_alert "MULTI-LAYER PROTECTION" "Layer 1: Patching specific functions" "info"
+                  
+                  # 补丁1: super.c中的两个关键函数改为static inline
+                  if [[ -f "${kerneldir}/fs/btrfs/super.c" ]]; then
+                      sed -i 's/^static int btrfs_cmp_device_free_bytes/static inline int btrfs_cmp_device_free_bytes/' "${kerneldir}/fs/btrfs/super.c"
+                      sed -i 's/^static int btrfs_calc_avail_data_space/static inline int btrfs_calc_avail_data_space/' "${kerneldir}/fs/btrfs/super.c"
+                      display_alert "Layer 1 applied" "super.c patched with static inline" "info"
+                  fi
+                  
+                  # 补丁2: volumes.c中可能的除法问题
+                  if [[ -f "${kerneldir}/fs/btrfs/volumes.c" ]]; then
+                      # 搜索并替换常见的除法模式
+                      sed -i 's/\([a-zA-Z0-9_]\+\) \/ \([0-9]\+\);/div_u64(\1, \2);/g' "${kerneldir}/fs/btrfs/volumes.c"
+                      display_alert "Layer 2 applied" "volumes.c patched for div patterns" "info"
+                  fi
+                  
+                  # 补丁3: extent-tree.c中的除法问题
+                  if [[ -f "${kerneldir}/fs/btrfs/extent-tree.c" ]]; then
+                      sed -i 's/\([a-zA-Z0-9_]\+\) % \([0-9]\+\);/do_div(\1, \2);/g' "${kerneldir}/fs/btrfs/extent-tree.c"
+                      display_alert "Layer 3 applied" "extent-tree.c patched for modulo patterns" "info"
+                  fi
+                  
+                  # 补丁4: 最终保险 - 删除可能导致问题的文件
+                  display_alert "MULTI-LAYER PROTECTION" "Layer 4: Removing risky files as last resort" "info"
+                  # 删除已知有问题的文件，但不删除整个目录（保留目录结构避免Kbuild出错）
+                  find "${kerneldir}/fs/btrfs" -name "*.c" -exec grep -l "__aeabi_uldivmod" {} \; | while read file; do
+                      display_alert "Removing problematic file" "$(basename $file)" "wrn"
+                      mv "$file" "$file.bak"
+                  done
+                  
+                  display_alert "MULTI-LAYER PROTECTION" "All layers deployed" "info"
               fi
               
-              # 同时，再次确保 .config 中相关选项被禁用
+              # 配置层面的最终保障
               if [[ -f .config ]]; then
-                  display_alert "Custom kernel config" "Ensuring BTRFS is disabled in .config" "info"
                   sed -i '/CONFIG_BTRFS_FS/d' .config
                   echo "# CONFIG_BTRFS_FS is not set" >> .config
-                  # 运行 olddefconfig 使修改生效并解决依赖关系
                   make ARCH=arm olddefconfig
               fi
           }
           EOF
-          echo "✅ Custom kernel config hook created (with source removal)"
-          cat userpatches/lib/functions/custom_kernel_config.sh
-          echo ""
 
-          echo "===== 6. Copying board and family configs to official paths ====="
+          echo "===== 6. Copying configs ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-          echo "✅ Board and family configs copied."
-          echo ""
-
-          echo "===== 7. Final verification ====="
-          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
-          echo "Kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
-          echo "Custom hook (with removal): $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
-          echo ""
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
