@@ -1,4 +1,4 @@
-name: Build Armbian for RK3128 - With toolchain fixes
+name: Build Armbian for RK3128 - Stable approach
 
 on:
   workflow_dispatch:
@@ -21,18 +21,11 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Prepare configuration with toolchain optimizations
+      - name: Prepare configuration
         working-directory: armbian-build
         run: |
           set -e
-          echo "===== [1/6] Fixing possible nested userpatches ====="
-          if [ -d "userpatches/userpatches" ]; then
-            mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
-            mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
-            rmdir userpatches/userpatches 2>/dev/null || true
-          fi
-
-          echo "===== [2/6] Creating board config (minimal) ====="
+          echo "===== Creating board config ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -42,82 +35,32 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== [3/6] Creating family config with toolchain overrides ====="
+          echo "===== Creating family config with Rockchip BSP kernel ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration with explicit toolchain settings
+          # Rockchip RK3128 family configuration
           KERNEL_MAJOR_MINOR="4.4"
           KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
           KERNELBRANCH="branch:rk312x-4.4"
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          
-          # Force link libgcc to resolve __aeabi_uldivmod
-          KCFLAGS="${KCFLAGS} -march=armv7-a -mfloat-abi=hard"
-          LDFLAGS="${LDFLAGS} -lgcc"
-          
           family_tweaks() { :; }
           EOF
 
-          echo "===== [4/6] Providing kernel config file (BTRFS as module, but with fix) ====="
+          echo "===== Providing kernel config (BTRFS disabled) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # Kernel config for RK3128 with toolchain fixes
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
           CONFIG_ARCH_RK312X=y
           CONFIG_EXT4_FS=y
-          CONFIG_BTRFS_FS=m
+          # CONFIG_BTRFS_FS is not set
           CONFIG_AEABI=y
           CONFIG_FRAME_POINTER=y
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
 
-          echo "===== [5/6] Creating custom kernel config hook to patch Btrfs Makefile ====="
-          mkdir -p userpatches/lib/functions
-          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
-          function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Patching Btrfs Makefile for libgcc link" "info"
-          }
-
-          function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用
-              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "Patching Btrfs Makefile" "Adding explicit libgcc link" "info"
-                  
-                  # 备份原Makefile
-                  cp "${kerneldir}/fs/btrfs/Makefile" "${kerneldir}/fs/btrfs/Makefile.bak"
-                  
-                  # 在Makefile末尾添加libgcc链接选项
-                  cat >> "${kerneldir}/fs/btrfs/Makefile" << 'MAKEFIX'
-                  
-          # RK3128 toolchain fix: explicitly link libgcc for ARM EABI functions
-          KBUILD_CFLAGS += -march=armv7-a -mfloat-abi=hard
-          KBUILD_LDFLAGS += -lgcc
-          MAKEFIX
-                  
-                  display_alert "Btrfs Makefile patched" "libgcc link added" "info"
-                  
-                  # 可选：查找libgcc.a的具体路径并添加到链接器搜索路径
-                  LIBGCC_PATH=$(arm-linux-gnueabihf-gcc --print-libgcc-file-name 2>/dev/null || echo "")
-                  if [[ -n "$LIBGCC_PATH" ]]; then
-                      display_alert "libgcc found at" "$LIBGCC_PATH" "info"
-                      echo "KBUILD_LDFLAGS += -L$(dirname $LIBGCC_PATH)" >> "${kerneldir}/fs/btrfs/Makefile"
-                  fi
-              fi
-              
-              # 在配置层面也确保Btrfs被正确设置
-              if [[ -f .config ]]; then
-                  # 确保Btrfs被设置为模块
-                  sed -i 's/.*CONFIG_BTRFS_FS.*/CONFIG_BTRFS_FS=m/' .config
-                  make ARCH=arm olddefconfig
-              fi
-          }
-          EOF
-          chmod +x userpatches/lib/functions/custom_kernel_config.sh
-
-          echo "===== [6/6] Creating post-build hook to install CUPS ====="
-          mkdir -p userpatches/overlay
+          echo "===== Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -132,18 +75,23 @@ jobs:
           EOF
           chmod +x userpatches/customize-image.sh
 
-      - name: Install host dependencies
+          echo "===== Copying configs to official paths ====="
+          mkdir -p config/boards config/sources/families
+          cp userpatches/boards/rk3128-box.conf config/boards/
+          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
             device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
-            udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross
+            udev kmod cpio
 
-      - name: Clean build cache
+      - name: Clean cache
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with toolchain fixes
+      - name: Build Armbian
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -154,12 +102,11 @@ jobs:
           KERNEL_CONFIGURE: no
           COMPRESS_OUTPUTIMAGE: sha,img
           ARCH: armhf
-          CROSS_COMPILE: arm-linux-gnueabihf-
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
         run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
-      - name: Upload final firmware
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: armbian-rk3128-printserver
