@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and deploy FINAL CONFIG SOLUTION
+      - name: Fix nested structure and deploy ULTIMATE BTRFS REMOVAL
         working-directory: armbian-build
         run: |
           set -e
@@ -56,7 +56,7 @@ jobs:
           family_tweaks() { :; }
           EOF
 
-          echo "===== 4. Providing kernel config file with BTRFS EXPLICITLY DISABLED ====="
+          echo "===== 4. Providing kernel config file ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
@@ -68,26 +68,43 @@ jobs:
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
 
-          echo "===== 5. Creating custom kernel config hook to ENSURE BTRFS IS DISABLED ====="
+          echo "===== 5. Creating custom kernel config hook to DISABLE BTRFS AT KBUILD LEVEL ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Ensuring BTRFS is disabled" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Deploying ULTIMATE BTRFS removal" "info"
           }
 
           function custom_kernel_config() {
+              # 此钩子在源码准备好后被调用
+              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
+                  display_alert "ULTIMATE BTRFS REMOVAL" "Step 1: Disabling BTRFS at Kbuild level" "info"
+                  
+                  # 核心操作：移除或重命名 fs/btrfs/Makefile
+                  # 这样 Kbuild 就不知道如何编译 Btrfs
+                  if [[ -f "${kerneldir}/fs/btrfs/Makefile" ]]; then
+                      mv "${kerneldir}/fs/btrfs/Makefile" "${kerneldir}/fs/btrfs/Makefile.DISABLED"
+                      display_alert "BTRFS Makefile disabled" "Kbuild will not build BTRFS" "info"
+                  fi
+                  
+                  # 同时，将所有 .c 文件重命名，作为第二层保险
+                  # 防止某些构建脚本直接依赖源文件
+                  find "${kerneldir}/fs/btrfs" -maxdepth 1 -name "*.c" | while read src_file; do
+                      mv "$src_file" "${src_file}.DISABLED"
+                  done
+                  
+                  display_alert "ULTIMATE BTRFS REMOVAL" "All BTRFS source files disabled" "info"
+              fi
+              
+              # 配置层面的最终保障
               if [[ -f .config ]]; then
-                  display_alert "FINAL CONFIG CHECK" "Ensuring BTRFS is disabled" "info"
-                  # 删除任何可能存在的 CONFIG_BTRFS_FS 行
                   sed -i '/CONFIG_BTRFS_FS/d' .config
-                  # 添加明确的禁用标记
                   echo "# CONFIG_BTRFS_FS is not set" >> .config
-                  # 运行 olddefconfig 解决依赖关系
                   make ARCH=arm olddefconfig
-                  display_alert "CONFIG_BTRFS_FS=n enforced" "BTRFS will not be built" "info"
               fi
           }
           EOF
+          echo "✅ Custom kernel config hook created (with ultimate removal)"
 
           echo "===== 6. Copying board and family configs to official paths ====="
           mkdir -p config/boards config/sources/families
