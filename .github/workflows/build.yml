@@ -53,24 +53,18 @@ jobs:
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           # Rockchip RK3128 family configuration with ARM32 compiler flags
             
+          # Source the common rockchip configuration if it exists
+          source "${BASH_SOURCE%/*}/include/rockchip-common.inc" 2>/dev/null || true
+            
           # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
-          
-          # Use Firefly kernel source (verified to work with RK3128)
-          KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"
-          KERNELBRANCH="branch:fireprime-linux"
-          
-          # U-Boot settings
-          BOOTSOURCE="https://github.com/u-boot/u-boot.git"
-          BOOTBRANCH="tag:v2017.09"
-          BOOTPATCHDIR="v2017.09"
-          
+            
           # Add compiler flags to fix ARM32 divmod issues
           KCFLAGS="${KCFLAGS} -mno-unaligned-access"
           
-          # Explicitly link libgcc to resolve __aeabi_uldivmod
+          # Add libgcc link flag to resolve __aeabi_uldivmod
           LDFLAGS="${LDFLAGS} -lgcc"
-          
+            
           # Family tweaks function
           family_tweaks() {
             : # No tweaks needed for basic functionality
@@ -87,27 +81,20 @@ jobs:
           ls -la config/kernel/
           echo ""
 
-          echo "===== 5. Creating user kernel config to DISABLE BTRFS ====="
-          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          # 用户提供的内核配置文件 - 明确禁用 BTRFS
-          CONFIG_ARM=y
-          CONFIG_ARCH_ROCKCHIP=y
-          CONFIG_ARCH_RK312X=y
-          CONFIG_EXT4_FS=y
-          # CONFIG_BTRFS_FS is not set
-          CONFIG_AEABI=y
-          CONFIG_FRAME_POINTER=y
-          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+          echo "===== 5. Creating kernel config fragment to DISABLE BTRFS ====="
+          mkdir -p userpatches/config/kernel
+          cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
+          # Disable BTRFS filesystem to fix ARM32 link error
+          CONFIG_BTRFS_FS=n
           EOF
-          echo "✅ User kernel config created at userpatches/linux-rk3128-legacy.config"
-          cat userpatches/linux-rk3128-legacy.config
+          echo "✅ Kernel config fragment created"
           echo ""
 
           echo "===== 6. Creating custom kernel config hook to patch Btrfs Makefile ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Patching Btrfs Makefile for libgcc link" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Patching Btrfs Makefile" "info"
           }
 
           function custom_kernel_config() {
@@ -121,54 +108,30 @@ jobs:
                   # 在Makefile末尾添加libgcc链接选项
                   cat >> "${kerneldir}/fs/btrfs/Makefile" << 'MAKEFIX'
                   
-          # RK3128 toolchain fix: explicitly link libgcc for ARM EABI functions
+          # Fix ARM32 __aeabi_uldivmod undefined reference
           KBUILD_LDFLAGS += -lgcc
           MAKEFIX
                   
                   display_alert "Btrfs Makefile patched" "libgcc link added" "info"
               fi
-              
-              # 在配置层面也确保Btrfs被禁用
-              if [[ -f .config ]]; then
-                  # 确保Btrfs被禁用
-                  sed -i '/CONFIG_BTRFS_FS/d' .config
-                  echo "# CONFIG_BTRFS_FS is not set" >> .config
-                  make ARCH=arm olddefconfig
-              fi
           }
           EOF
           echo "✅ Custom kernel config hook created"
-          cat userpatches/lib/functions/custom_kernel_config.sh
           echo ""
 
-          echo "===== 7. Creating CUPS install script ====="
-          cat > userpatches/customize-image.sh << 'EOF'
-          #!/bin/bash
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y cups cups-client cups-filters printer-driver-all hplip network-manager
-          cupsctl --remote-admin --remote-any --share-printers
-          if ! id "pi" &>/dev/null; then
-              useradd -m -G lpadmin -s /bin/bash pi
-              echo "pi:armbian" | chpasswd
-          fi
-          apt-get clean
-          EOF
-          chmod +x userpatches/customize-image.sh
-          echo "✅ CUPS install script created"
-
-          echo "===== 8. Copying configs to official paths ====="
-          mkdir -p config/boards config/sources/families
+          echo "===== 7. Copying configs to official paths ====="
+          mkdir -p config/boards config/sources/families config/kernel
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          cp userpatches/config/kernel/linux-rk3128-legacy.fragment config/kernel/
           echo "✅ Configs copied."
-          ls -la config/boards/ config/sources/families/
+          ls -la config/boards/ config/sources/families/ config/kernel/
           echo ""
 
-          echo "===== 9. Final verification ====="
+          echo "===== 8. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "Kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel fragment: $(ls -la config/kernel/linux-rk3128-legacy.fragment 2>/dev/null || echo 'Not found')"
           echo "Custom hook: $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
