@@ -105,22 +105,25 @@ jobs:
                   display_alert "Custom kernel config" "Applying Arnd Bergmann's authoritative patch to super.c" "info"
                   
                   # 定义补丁内容：将 super.c 中的两个关键函数改为 static inline
-                  # 这是基于 2018 年 Arnd Bergmann 提交并被主线合并的修复方案[citation:2][citation:6]
+                  # 这是基于 2018 年 Arnd Bergmann 提交并被主线合并的修复方案
+                  # 参考: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7e17916b3579
                   PATCH_FILE="${kerneldir}/fs/btrfs/super.c"
                   if [[ -f "$PATCH_FILE" ]]; then
                       # 备份原文件
                       cp "$PATCH_FILE" "${PATCH_FILE}.bak"
                       
                       # 应用补丁：将 btrfs_cmp_device_free_bytes 和 btrfs_calc_avail_data_space 改为 static inline
-                      # 这是内核开发者验证过的权威修复[citation:5][citation:7]
+                      # 这是内核开发者验证过的权威修复
+                      display_alert "Patching super.c" "Changing functions to static inline" "info"
                       sed -i 's/^static int btrfs_cmp_device_free_bytes/static inline int btrfs_cmp_device_free_bytes/' "$PATCH_FILE"
                       sed -i 's/^static int btrfs_calc_avail_data_space/static inline int btrfs_calc_avail_data_space/' "$PATCH_FILE"
                       
-                      display_alert "Patched super.c" "Functions changed to static inline (authoritative fix)" "info"
-                      
-                      # 显示修改确认
-                      grep -n "static inline.*btrfs_cmp_device_free_bytes" "$PATCH_FILE" || true
-                      grep -n "static inline.*btrfs_calc_avail_data_space" "$PATCH_FILE" || true
+                      # 验证补丁是否应用成功
+                      if grep -q "static inline.*btrfs_cmp_device_free_bytes" "$PATCH_FILE"; then
+                          display_alert "Patch applied successfully" "btrfs_cmp_device_free_bytes is now static inline" "info"
+                      else
+                          display_alert "Patch may have failed" "btrfs_cmp_device_free_bytes not found as static inline" "wrn"
+                      fi
                   else
                       display_alert "super.c not found!" "BTRFS source structure unexpected" "err"
                   fi
