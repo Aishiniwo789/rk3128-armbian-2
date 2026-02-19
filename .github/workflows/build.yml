@@ -90,23 +90,19 @@ jobs:
           ls -la userpatches/config/kernel/
           echo ""
 
-          echo "===== 6. Creating FIXED kernel patch for Btrfs ====="
-          # 创建内核补丁目录
+          echo "===== 6. Creating SIMPLIFIED kernel patch for Btrfs ====="
           mkdir -p userpatches/kernel/archive/rk3128-4.4
           
-          # 创建正确的补丁文件 - 使用更通用的格式
+          # 使用更简单的补丁格式，只添加行而不依赖上下文
           cat > userpatches/kernel/archive/rk3128-4.4/0001-btrfs-add-libgcc.patch << 'EOF'
           --- a/fs/btrfs/Makefile
           +++ b/fs/btrfs/Makefile
-          @@ -23,3 +23,6 @@
-           btrfs-$(CONFIG_BTRFS_FS_POSIX_ACL) += acl.o
-           btrfs-$(CONFIG_BTRFS_FS_CHECK_INTEGRITY) += check-integrity.o
-           btrfs-$(CONFIG_BTRFS_FS_REF_VERIFY) += ref-verify.o
+          @@ -26,0 +27,3 @@
           +
           +# Fix ARM32 __aeabi_uldivmod undefined reference
           +KBUILD_LDFLAGS += -lgcc
           EOF
-          echo "✅ Fixed kernel patch created"
+          echo "✅ Simplified kernel patch created"
           ls -la userpatches/kernel/archive/rk3128-4.4/
           echo ""
 
