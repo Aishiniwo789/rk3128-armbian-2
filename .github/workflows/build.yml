@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide COMPLETE family config with compiler flags
+      - name: Fix nested structure and provide COMPLETE family config
         working-directory: armbian-build
         run: |
           set -e
@@ -47,15 +47,15 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating family config with GLOBAL compiler flags ====="
+          echo "===== 3. Creating family config ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration with GLOBAL compiler flags
+          # Rockchip RK3128 family configuration
             
           # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
           
-          # 换回之前能成功拉取的官方稳定内核
+          # Use stable kernel source
           KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
           KERNELBRANCH="branch:linux-4.4.y"
           
@@ -63,31 +63,17 @@ jobs:
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          
-          # GLOBAL compiler flags for all modules
-          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
-          KCFLAGS="${KCFLAGS} -march=armv7-a -mfloat-abi=hard"
-          
-          # Add libgcc globally to resolve __aeabi_uldivmod for ALL modules
-          LDFLAGS="${LDFLAGS} -lgcc"
             
           # Family tweaks function
           family_tweaks() {
             : # No tweaks needed
           }
           EOF
-          echo "✅ Family config created with GLOBAL flags:"
+          echo "✅ Family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
-          echo "===== 4. Creating kernel config placeholder ====="
-          mkdir -p config/kernel
-          touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created"
-          ls -la config/kernel/
-          echo ""
-
-          echo "===== 5. Creating kernel config fragment to DISABLE BTRFS ====="
+          echo "===== 4. Creating kernel config fragment to DISABLE BTRFS ====="
           mkdir -p userpatches/config/kernel
           cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
           # Disable BTRFS filesystem
@@ -95,6 +81,28 @@ jobs:
           EOF
           echo "✅ Kernel config fragment created"
           ls -la userpatches/config/kernel/
+          echo ""
+
+          echo "===== 5. Creating kernel patch to add libgcc globally ====="
+          mkdir -p userpatches/kernel/archive/rk3128-4.4
+          
+          # 创建一个修改顶层Makefile的补丁，全局添加libgcc
+          cat > userpatches/kernel/archive/rk3128-4.4/0001-add-libgcc-globally.patch << 'EOF'
+          --- a/Makefile
+          +++ b/Makefile
+          @@ -875,6 +875,9 @@
+           endif
+           KBUILD_CFLAGS += $(call cc-option,-fdata-sections,)
+           
+          +# Add libgcc to resolve ARM32 __aeabi_* functions
+          +KBUILD_LDFLAGS_MODULE += -lgcc
+          +
+           # arch Makefile may override CC so keep this after arch Makefile is included
+           NOSTDINC_FLAGS += -nostdinc -isystem $(shell $(CC) -print-file-name=include)
+           KBUILD_CFLAGS += $(call cc-option,-Wdeclaration-after-statement,)
+          EOF
+          echo "✅ Global libgcc patch created"
+          ls -la userpatches/kernel/archive/rk3128-4.4/
           echo ""
 
           echo "===== 6. Creating CUPS install script ====="
@@ -126,6 +134,7 @@ jobs:
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "Kernel fragment: $(ls -la config/kernel/linux-rk3128-legacy.fragment 2>/dev/null || echo 'Not found')"
+          echo "Kernel patch: $(ls -la userpatches/kernel/archive/rk3128-4.4/0001-add-libgcc-globally.patch 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
@@ -135,7 +144,7 @@ jobs:
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with GLOBAL compiler flags
+      - name: Build Armbian
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
