@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and deploy FINAL SOLUTION
+      - name: Fix nested structure and deploy FINAL CONFIG SOLUTION
         working-directory: armbian-build
         run: |
           set -e
@@ -56,57 +56,38 @@ jobs:
           family_tweaks() { :; }
           EOF
 
-          echo "===== 4. Providing kernel config file ====="
+          echo "===== 4. Providing kernel config file with BTRFS EXPLICITLY DISABLED ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
           CONFIG_ARCH_RK312X=y
           CONFIG_EXT4_FS=y
-          CONFIG_BTRFS_FS=n
+          # CONFIG_BTRFS_FS is not set
           CONFIG_AEABI=y
           CONFIG_FRAME_POINTER=y
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
 
-          echo "===== 5. Creating POST_KERNEL_CONFIG hook for ULTIMATE BTRFS REMOVAL ====="
+          echo "===== 5. Creating custom kernel config hook to ENSURE BTRFS IS DISABLED ====="
           mkdir -p userpatches/lib/functions
           cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
           function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Deploying final BTRFS solution" "info"
+              display_alert "Preparing custom kernel config hook" "rk3128: Ensuring BTRFS is disabled" "info"
           }
 
           function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用
-              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "FINAL SOLUTION" "Step 1: Applying authoritative kernel patch" "info"
-                  
-                  # 补丁1: super.c中的两个关键函数改为static inline (Arnd Bergmann的权威修复)
-                  if [[ -f "${kerneldir}/fs/btrfs/super.c" ]]; then
-                      sed -i 's/^static int btrfs_cmp_device_free_bytes/static inline int btrfs_cmp_device_free_bytes/' "${kerneldir}/fs/btrfs/super.c"
-                      sed -i 's/^static int btrfs_calc_avail_data_space/static inline int btrfs_calc_avail_data_space/' "${kerneldir}/fs/btrfs/super.c"
-                      display_alert "Authoritative patch applied" "super.c functions now static inline" "info"
-                  fi
-                  
-                  display_alert "FINAL SOLUTION" "Step 2: Renaming Btrfs source files AFTER Kbuild scan" "wrn"
-                  # 重命名所有 .c 文件，使它们对Kbuild不可见
-                  # 但保留目录结构以避免破坏Kbuild的依赖关系
-                  find "${kerneldir}/fs/btrfs" -name "*.c" | while read src_file; do
-                      mv "$src_file" "${src_file}.DISABLED"
-                      display_alert "Disabled" "$(basename $src_file)" "info"
-                  done
-                  
-                  display_alert "FINAL SOLUTION" "All Btrfs source files disabled" "info"
-              fi
-              
-              # 配置层面的最终保障
               if [[ -f .config ]]; then
+                  display_alert "FINAL CONFIG CHECK" "Ensuring BTRFS is disabled" "info"
+                  # 删除任何可能存在的 CONFIG_BTRFS_FS 行
                   sed -i '/CONFIG_BTRFS_FS/d' .config
+                  # 添加明确的禁用标记
                   echo "# CONFIG_BTRFS_FS is not set" >> .config
+                  # 运行 olddefconfig 解决依赖关系
                   make ARCH=arm olddefconfig
+                  display_alert "CONFIG_BTRFS_FS=n enforced" "BTRFS will not be built" "info"
               fi
           }
           EOF
-          echo "✅ Custom kernel config hook created (with final solution)"
 
           echo "===== 6. Copying board and family configs to official paths ====="
           mkdir -p config/boards config/sources/families
