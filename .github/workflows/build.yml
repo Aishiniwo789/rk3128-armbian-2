@@ -49,7 +49,6 @@ jobs:
 
           echo "===== 3. Creating family config with compiler flags for ARM32 ====="
           mkdir -p userpatches/config/sources/families
-          # 创建包含必要编译器标志的家族配置文件
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           # Rockchip RK3128 family configuration with ARM32 compiler flags
             
@@ -77,80 +76,62 @@ jobs:
           echo "===== 4. Creating kernel config placeholder ====="
           mkdir -p config/kernel
           touch config/kernel/linux-rk3128-legacy.config
-          echo "✅ Placeholder kernel config created at config/kernel/linux-rk3128-legacy.config"
+          echo "✅ Placeholder kernel config created"
           ls -la config/kernel/
           echo ""
 
           echo "===== 5. Creating kernel config fragment to DISABLE BTRFS ====="
           mkdir -p userpatches/config/kernel
           cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
-          # Disable BTRFS filesystem to fix ARM32 link error
+          # Disable BTRFS filesystem
           CONFIG_BTRFS_FS=n
           EOF
           echo "✅ Kernel config fragment created"
           ls -la userpatches/config/kernel/
           echo ""
 
-          echo "===== 6. Creating custom kernel config hook with VERIFICATION ====="
-          mkdir -p userpatches/lib/functions
-          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
-          function extension_prepare_config__custom_kernel_config() {
-              display_alert "Preparing custom kernel config hook" "rk3128: Patching Btrfs Makefile" "info"
-          }
+          echo "===== 6. Creating KERNEL PATCH (not hook) to fix Btrfs ====="
+          # 创建内核补丁目录 - Armbian会自动应用这里的补丁
+          mkdir -p userpatches/kernel/archive/rk3128-4.4
+          
+          # 创建补丁文件，在编译前修改Btrfs Makefile
+          cat > userpatches/kernel/archive/rk3128-4.4/0001-btrfs-add-libgcc.patch << 'EOF'
+          --- a/fs/btrfs/Makefile
+          +++ b/fs/btrfs/Makefile
+          @@ -22,3 +22,6 @@
+           btrfs-$(CONFIG_BTRFS_FS_POSIX_ACL) += acl.o
+           btrfs-$(CONFIG_BTRFS_FS_CHECK_INTEGRITY) += check-integrity.o
+           btrfs-$(CONFIG_BTRFS_FS_REF_VERIFY) += ref-verify.o
+          +
+          +# Fix ARM32 __aeabi_uldivmod undefined reference
+          +KBUILD_LDFLAGS += -lgcc
+          EOF
+          echo "✅ Kernel patch created"
+          ls -la userpatches/kernel/archive/rk3128-4.4/
+          echo ""
 
-          function custom_kernel_config() {
-              # 此钩子在源码准备好后被调用
+          echo "===== 7. Creating DEBUG script to verify patch application ====="
+          mkdir -p userpatches/lib/functions
+          cat > userpatches/lib/functions/debug.sh << 'EOF'
+          function extension_prepare_config__debug() {
+              display_alert "DEBUG: Checking patch application" "rk3128" "info"
+              
+              # 在内核源码准备好后检查补丁是否应用
               if [[ -d "${kerneldir}/fs/btrfs" ]]; then
-                  display_alert "🔍 VERIFICATION" "Btrfs source directory found" "info"
-                  
-                  # 检查Makefile是否存在
                   if [[ -f "${kerneldir}/fs/btrfs/Makefile" ]]; then
-                      display_alert "🔍 VERIFICATION" "Btrfs Makefile found" "info"
-                      
-                      # 备份原Makefile
-                      cp "${kerneldir}/fs/btrfs/Makefile" "${kerneldir}/fs/btrfs/Makefile.bak"
-                      
-                      # 在Makefile末尾添加libgcc链接选项
-                      cat >> "${kerneldir}/fs/btrfs/Makefile" << 'MAKEFIX'
-                  
-          # Fix ARM32 __aeabi_uldivmod undefined reference
-          KBUILD_LDFLAGS += -lgcc
-          MAKEFIX
-                      
-                      display_alert "✅ PATCH APPLIED" "libgcc link added to Btrfs Makefile" "info"
-                      
-                      # 验证补丁是否成功添加
                       if grep -q "KBUILD_LDFLAGS += -lgcc" "${kerneldir}/fs/btrfs/Makefile"; then
-                          display_alert "✅ VERIFICATION PASSED" "libgcc link found in Makefile" "info"
+                          display_alert "✅ DEBUG: libgcc link found in Makefile" "Btrfs patch applied" "info"
                       else
-                          display_alert "❌ VERIFICATION FAILED" "libgcc link NOT found in Makefile" "err"
-                      fi
-                  else
-                      display_alert "❌ VERIFICATION FAILED" "Btrfs Makefile not found" "err"
-                  fi
-                  
-                  # 检查.config中Btrfs配置状态
-                  if [[ -f .config ]]; then
-                      if grep -q "CONFIG_BTRFS_FS=y" .config; then
-                          display_alert "⚠️ BTRFS CONFIG" "Btrfs is built-in (y)" "wrn"
-                      elif grep -q "CONFIG_BTRFS_FS=m" .config; then
-                          display_alert "⚠️ BTRFS CONFIG" "Btrfs is a module (m)" "wrn"
-                      elif grep -q "# CONFIG_BTRFS_FS is not set" .config; then
-                          display_alert "✅ BTRFS CONFIG" "Btrfs is disabled (not set)" "info"
-                      else
-                          display_alert "❓ BTRFS CONFIG" "Btrfs config not found" "info"
+                          display_alert "❌ DEBUG: libgcc link NOT found" "Btrfs patch missing" "err"
                       fi
                   fi
-              else
-                  display_alert "❌ VERIFICATION FAILED" "Btrfs source directory NOT found" "err"
               fi
           }
           EOF
-          echo "✅ Custom kernel config hook created with verification"
-          cat userpatches/lib/functions/custom_kernel_config.sh
+          echo "✅ Debug script created"
           echo ""
 
-          echo "===== 7. Creating CUPS install script ====="
+          echo "===== 8. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -166,7 +147,7 @@ jobs:
           chmod +x userpatches/customize-image.sh
           echo "✅ CUPS install script created"
 
-          echo "===== 8. Copying configs to official paths ====="
+          echo "===== 9. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families config/kernel
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -175,11 +156,11 @@ jobs:
           ls -la config/boards/ config/sources/families/ config/kernel/
           echo ""
 
-          echo "===== 9. Final verification ====="
+          echo "===== 10. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "Kernel fragment: $(ls -la config/kernel/linux-rk3128-legacy.fragment 2>/dev/null || echo 'Not found')"
-          echo "Custom hook: $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
+          echo "Kernel patch: $(ls -la userpatches/kernel/archive/rk3128-4.4/0001-btrfs-add-libgcc.patch 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
