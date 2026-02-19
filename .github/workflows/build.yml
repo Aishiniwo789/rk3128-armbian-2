@@ -1,4 +1,4 @@
-name: Build Armbian for RK3128
+name: Build Armbian for RK3128 - New Approach
 
 on:
   workflow_dispatch:
@@ -21,18 +21,18 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and deploy FINAL ROCKCHIP BSP SOLUTION
+      - name: Prepare clean configuration and patches
         working-directory: armbian-build
         run: |
           set -e
-          echo "===== 1. Fixing possible nested userpatches ====="
+          echo "===== [1/6] Fixing possible nested userpatches ====="
           if [ -d "userpatches/userpatches" ]; then
             mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
             mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
             rmdir userpatches/userpatches 2>/dev/null || true
           fi
-
-          echo "===== 2. Creating board config ====="
+          
+          echo "===== [2/6] Creating board config (minimal) ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -41,23 +41,21 @@ jobs:
           BRANCH="legacy"
           KERNEL_TARGET="legacy"
           EOF
-
-          echo "===== 3. Creating family config with ROCKCHIP BSP KERNEL ====="
+          
+          echo "===== [3/6] Creating family config (Rockchip BSP kernel) ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - using Rockchip BSP kernel
+          # Rockchip RK3128 family - using Rockchip's BSP kernel
           KERNEL_MAJOR_MINOR="4.4"
-          # Rockchip's official BSP kernel for RK3128
           KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
           KERNELBRANCH="branch:rk312x-4.4"
-          KERNELPATCHDIR="rk3128"
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
           family_tweaks() { :; }
           EOF
-
-          echo "===== 4. Providing kernel config file ====="
+          
+          echo "===== [4/6] Providing kernel config file (BTRFS explicitly disabled) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           # Rockchip RK3128 BSP kernel configuration
           CONFIG_ARM=y
@@ -69,27 +67,38 @@ jobs:
           CONFIG_FRAME_POINTER=y
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
-
-          echo "===== 5. Creating post-build hook to install CUPS ====="
+          
+          echo "===== [5/6] Creating post-build hook to install CUPS ====="
           mkdir -p userpatches/overlay
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           # Post-build customization script
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y cups cups-client cups-filters printer-driver-all hplip
+          apt-get install -y cups cups-client cups-filters printer-driver-all hplip network-manager
           cupsctl --remote-admin --remote-any --share-printers
           if ! id "pi" &>/dev/null; then
               useradd -m -G lpadmin -s /bin/bash pi
               echo "pi:armbian" | chpasswd
           fi
+          apt-get clean
           EOF
           chmod +x userpatches/customize-image.sh
+          
+          echo "===== [6/6] Copying essential configs to official paths ====="
+          mkdir -p config/boards config/sources/families
+          cp userpatches/boards/rk3128-box.conf config/boards/
+          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
+          # Kernel config is picked up automatically from userpatches/
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
+            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
+            udev kmod cpio
 
-      - name: Clean cache
+      - name: Clean build cache
         working-directory: armbian-build
         run: rm -rf output/cache
 
@@ -108,7 +117,7 @@ jobs:
           IGNORE_UPDATES: yes
         run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
-      - name: Upload firmware
+      - name: Upload final firmware
         uses: actions/upload-artifact@v4
         with:
           name: armbian-rk3128-printserver
