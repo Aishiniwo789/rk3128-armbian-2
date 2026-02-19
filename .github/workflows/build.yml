@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide configs
+      - name: Fix nested structure and provide FINAL configuration
         working-directory: armbian-build
         run: |
           set -e
@@ -42,21 +42,22 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config ====="
+          echo "===== 3. Creating family config with Firefly kernel ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration
+          # Rockchip RK3128 family configuration using Firefly kernel
           KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
-          KERNELBRANCH="branch:linux-4.4.y"
+          KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"
+          KERNELBRANCH="branch:master"
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
+          # Add global linker flag to fix __aeabi_uldivmod
+          LDFLAGS="${LDFLAGS} -lgcc"
           family_tweaks() { :; }
           EOF
 
-          echo "===== 4. Creating user kernel config (CORRECT LOCATION) ====="
-          # 放在 userpatches/ 根目录下，Armbian会自动找到它
+          echo "===== 4. Creating user kernel config (disable BTRFS) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
@@ -71,7 +72,6 @@ jobs:
           echo "===== 5. Creating kernel config fragment ====="
           mkdir -p userpatches/config/kernel
           cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
-          # Disable BTRFS
           CONFIG_BTRFS_FS=n
           EOF
 
@@ -90,7 +90,7 @@ jobs:
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 7. Copying board and family configs ====="
+          echo "===== 7. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -102,13 +102,13 @@ jobs:
           echo ""
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross
 
       - name: Clean cache
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian
+      - name: Build Armbian with Firefly kernel
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
