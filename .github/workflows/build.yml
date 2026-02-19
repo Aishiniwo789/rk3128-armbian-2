@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide COMPLETE family config
+      - name: Fix nested structure and provide COMPLETE family config with compiler flags
         working-directory: armbian-build
         run: |
           set -e
@@ -47,31 +47,36 @@ jobs:
           cat userpatches/boards/rk3128-box.conf
           echo ""
 
-          echo "===== 3. Creating COMPLETE family config (rk3128.conf) ====="
+          echo "===== 3. Creating family config with compiler flags for ARM32 ====="
           mkdir -p userpatches/config/sources/families
-          # 创建完整的家族配置文件，包含所有必需的变量
+          # 创建包含必要编译器标志的家族配置文件
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration - complete version
-          # Based on Armbian requirements for legacy kernel
+          # Rockchip RK3128 family configuration with ARM32 compiler flags
             
-          # Explicitly set kernel version for legacy branch (required by build system)
+          # Explicitly set kernel version for legacy branch
           KERNEL_MAJOR_MINOR="4.4"
           
-          # Use Rockchip BSP kernel
-          KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
-          KERNELBRANCH="branch:rk312x-4.4"
+          # Use Firefly kernel source (verified to work with RK3128)
+          KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"
+          KERNELBRANCH="branch:fireprime-linux"
           
           # U-Boot settings
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-            
-          # Family tweaks function (required by build system)
+          
+          # Add compiler flags to fix ARM32 divmod issues
+          KCFLAGS="${KCFLAGS} -mno-unaligned-access"
+          
+          # Explicitly link libgcc to resolve __aeabi_uldivmod
+          LDFLAGS="${LDFLAGS} -lgcc"
+          
+          # Family tweaks function
           family_tweaks() {
             : # No tweaks needed for basic functionality
           }
           EOF
-          echo "✅ Complete family config created:"
+          echo "✅ Family config created:"
           cat userpatches/config/sources/families/rk3128.conf
           echo ""
 
@@ -82,7 +87,77 @@ jobs:
           ls -la config/kernel/
           echo ""
 
-          echo "===== 5. Copying configs to official paths ====="
+          echo "===== 5. Creating user kernel config to DISABLE BTRFS ====="
+          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
+          # 用户提供的内核配置文件 - 明确禁用 BTRFS
+          CONFIG_ARM=y
+          CONFIG_ARCH_ROCKCHIP=y
+          CONFIG_ARCH_RK312X=y
+          CONFIG_EXT4_FS=y
+          # CONFIG_BTRFS_FS is not set
+          CONFIG_AEABI=y
+          CONFIG_FRAME_POINTER=y
+          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+          EOF
+          echo "✅ User kernel config created at userpatches/linux-rk3128-legacy.config"
+          cat userpatches/linux-rk3128-legacy.config
+          echo ""
+
+          echo "===== 6. Creating custom kernel config hook to patch Btrfs Makefile ====="
+          mkdir -p userpatches/lib/functions
+          cat > userpatches/lib/functions/custom_kernel_config.sh << 'EOF'
+          function extension_prepare_config__custom_kernel_config() {
+              display_alert "Preparing custom kernel config hook" "rk3128: Patching Btrfs Makefile for libgcc link" "info"
+          }
+
+          function custom_kernel_config() {
+              # 此钩子在源码准备好后被调用
+              if [[ -d "${kerneldir}/fs/btrfs" ]]; then
+                  display_alert "Patching Btrfs Makefile" "Adding explicit libgcc link" "info"
+                  
+                  # 备份原Makefile
+                  cp "${kerneldir}/fs/btrfs/Makefile" "${kerneldir}/fs/btrfs/Makefile.bak"
+                  
+                  # 在Makefile末尾添加libgcc链接选项
+                  cat >> "${kerneldir}/fs/btrfs/Makefile" << 'MAKEFIX'
+                  
+          # RK3128 toolchain fix: explicitly link libgcc for ARM EABI functions
+          KBUILD_LDFLAGS += -lgcc
+          MAKEFIX
+                  
+                  display_alert "Btrfs Makefile patched" "libgcc link added" "info"
+              fi
+              
+              # 在配置层面也确保Btrfs被禁用
+              if [[ -f .config ]]; then
+                  # 确保Btrfs被禁用
+                  sed -i '/CONFIG_BTRFS_FS/d' .config
+                  echo "# CONFIG_BTRFS_FS is not set" >> .config
+                  make ARCH=arm olddefconfig
+              fi
+          }
+          EOF
+          echo "✅ Custom kernel config hook created"
+          cat userpatches/lib/functions/custom_kernel_config.sh
+          echo ""
+
+          echo "===== 7. Creating CUPS install script ====="
+          cat > userpatches/customize-image.sh << 'EOF'
+          #!/bin/bash
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y cups cups-client cups-filters printer-driver-all hplip network-manager
+          cupsctl --remote-admin --remote-any --share-printers
+          if ! id "pi" &>/dev/null; then
+              useradd -m -G lpadmin -s /bin/bash pi
+              echo "pi:armbian" | chpasswd
+          fi
+          apt-get clean
+          EOF
+          chmod +x userpatches/customize-image.sh
+          echo "✅ CUPS install script created"
+
+          echo "===== 8. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -90,14 +165,15 @@ jobs:
           ls -la config/boards/ config/sources/families/
           echo ""
 
-          echo "===== 6. Final verification ====="
+          echo "===== 9. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "Kernel config: $(ls -la config/kernel/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Custom hook: $(ls -la userpatches/lib/functions/custom_kernel_config.sh 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross
 
       - name: Clean cache
         working-directory: armbian-build
