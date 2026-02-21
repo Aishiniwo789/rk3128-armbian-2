@@ -19,10 +19,10 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Setup
+      - name: Setup configuration
         working-directory: armbian-build
         run: |
-          echo "Creating board config"
+          echo "===== Creating board config ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -31,8 +31,11 @@ jobs:
           BRANCH="legacy"
           KERNEL_TARGET="legacy"
           EOF
-
-          echo "Creating family config"
+          
+          echo "Board config created:"
+          cat userpatches/boards/rk3128-box.conf
+          
+          echo "===== Creating family config ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           KERNEL_MAJOR_MINOR="4.4"
@@ -43,6 +46,31 @@ jobs:
           LDFLAGS="${LDFLAGS} -lgcc"
           family_tweaks() { :; }
           EOF
+          
+          echo "Family config created:"
+          cat userpatches/config/sources/families/rk3128.conf
+          
+          echo "===== Creating kernel config (disable BTRFS) ====="
+          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
+          CONFIG_ARM=y
+          CONFIG_ARCH_ROCKCHIP=y
+          CONFIG_ARCH_RK312X=y
+          CONFIG_EXT4_FS=y
+          # CONFIG_BTRFS_FS is not set
+          CONFIG_AEABI=y
+          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+          EOF
+          
+          echo "===== Copying configs to official paths ====="
+          mkdir -p config/boards config/sources/families
+          cp -v userpatches/boards/rk3128-box.conf config/boards/
+          cp -v userpatches/config/sources/families/rk3128.conf config/sources/families/
+          
+          echo "===== Verification ====="
+          echo "Board config in official path:"
+          ls -la config/boards/
+          echo "Family config in official path:"
+          ls -la config/sources/families/
 
       - name: Install dependencies
         run: |
@@ -50,7 +78,11 @@ jobs:
           sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
             device-tree-compiler pv bc build-essential git
 
-      - name: Build
+      - name: Clean cache
+        working-directory: armbian-build
+        run: rm -rf output/cache
+
+      - name: Build Armbian
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -63,7 +95,7 @@ jobs:
           echo "Starting build..."
           ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE ARCH=$ARCH
 
-      - name: Upload
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: armbian-rk3128-printserver
