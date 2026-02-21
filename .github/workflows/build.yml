@@ -112,9 +112,9 @@ jobs:
           sudo apt-get update
           # 安装特定版本的bison和flex以兼容旧内核
           sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
-            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
-            udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
-            bison=2:3.8.2-1build2 flex=2.6.4-8build2
+               device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
+               udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
+               bison=2:3.8.2+dfsg-1build1 flex
 
       - name: Clean cache
         working-directory: armbian-build
