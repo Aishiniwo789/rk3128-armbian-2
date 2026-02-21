@@ -32,9 +32,6 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
           
-          echo "Board config created:"
-          cat userpatches/boards/rk3128-box.conf
-          
           echo "===== Creating family config ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
@@ -46,9 +43,6 @@ jobs:
           LDFLAGS="${LDFLAGS} -lgcc"
           family_tweaks() { :; }
           EOF
-          
-          echo "Family config created:"
-          cat userpatches/config/sources/families/rk3128.conf
           
           echo "===== Creating kernel config (disable BTRFS) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
@@ -65,12 +59,6 @@ jobs:
           mkdir -p config/boards config/sources/families
           cp -v userpatches/boards/rk3128-box.conf config/boards/
           cp -v userpatches/config/sources/families/rk3128.conf config/sources/families/
-          
-          echo "===== Verification ====="
-          echo "Board config in official path:"
-          ls -la config/boards/
-          echo "Family config in official path:"
-          ls -la config/sources/families/
 
       - name: Install dependencies
         run: |
@@ -89,14 +77,16 @@ jobs:
           BRANCH: legacy
           RELEASE: bullseye
           BUILD_DESKTOP: no
+          BUILD_MINIMAL: no        # 添加这个变量，选择标准镜像
           KERNEL_CONFIGURE: no
           ARCH: armhf
         run: |
           echo "Starting build..."
-          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE ARCH=$ARCH
+          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_DESKTOP=$BUILD_DESKTOP BUILD_MINIMAL=$BUILD_MINIMAL KERNEL_CONFIGURE=$KERNEL_CONFIGURE ARCH=$ARCH
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: armbian-rk3128-printserver
           path: armbian-build/output/images/*.img
+          retention-days: 7
