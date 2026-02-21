@@ -81,40 +81,41 @@ jobs:
           CONFIG_BTRFS_FS=n
           EOF
 
-          echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
-          mkdir -p userpatches/kernel/archive/rk3128-4.4
-          
-          # Patch 1: Fix compiler-gcc13.h missing error by ensuring GCC_VERSION is defined
-          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
-          --- a/include/linux/compiler-gcc.h
-          +++ b/include/linux/compiler-gcc.h
-          @@ -100,7 +100,9 @@
-           #endif
-           #endif
-           
-          -#if GCC_VERSION >= 40600
-          +#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
-          +
-          +#if defined(GCC_VERSION) && GCC_VERSION >= 40600
-           #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
-           #endif
-          EOF
+echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
+mkdir -p userpatches/kernel/archive/rk3128-4.4
 
-          # Patch 2: Fix yylloc multiple definition error by removing redundant declaration
-          # This is the exact fix merged into the mainline kernel [citation:3][citation:5][citation:8]
-          cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
-          --- a/scripts/dtc/dtc-lexer.l
-          +++ b/scripts/dtc/dtc-lexer.l
-          @@ -23,7 +23,6 @@
-           #include "srcpos.h"
-           #include "dtc-parser.tab.h"
-           
-          -YYLTYPE yylloc;
-           extern bool treesource_error;
-           
-           /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
-          EOF
-          echo "✅ Kernel patches created"
+# Patch 1: Fix compiler-gcc13.h missing error - 使用更通用的格式
+cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
+--- a/include/linux/compiler-gcc.h
++++ b/include/linux/compiler-gcc.h
+@@ -97,7 +97,9 @@
+ #endif
+ #endif
+ 
+-#if GCC_VERSION >= 40600
++#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
++
++#if defined(GCC_VERSION) && GCC_VERSION >= 40600
+ #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+ #endif
+EOF
+
+# Patch 2: Fix yylloc multiple definition error - 使用更通用的格式
+cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
+--- a/scripts/dtc/dtc-lexer.l
++++ b/scripts/dtc/dtc-lexer.l
+@@ -20,10 +20,6 @@
+ 
+ #include "srcpos.h"
+ #include "dtc-parser.tab.h"
+-
+-YYLTYPE yylloc;
+-
+ extern bool treesource_error;
+ 
+ /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
+EOF
+echo "✅ Kernel patches created with more generic context"
 
           echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
