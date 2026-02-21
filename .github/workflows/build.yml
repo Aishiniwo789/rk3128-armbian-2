@@ -2,8 +2,6 @@ name: Build Armbian for RK3128
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build:
@@ -16,32 +14,15 @@ jobs:
           repository: armbian/build
           path: armbian-build
 
-      - name: Checkout userpatches (current repository)
+      - name: Checkout userpatches
         uses: actions/checkout@v4
         with:
           path: armbian-build/userpatches
 
-      - name: DEBUG - Show initial structure
+      - name: Setup
         working-directory: armbian-build
         run: |
-          echo "===== INITIAL STRUCTURE ====="
-          pwd
-          ls -la
-          echo "===== userpatches content ====="
-          ls -la userpatches/ || echo "userpatches empty"
-
-      - name: Fix nested structure and provide basic config
-        working-directory: armbian-build
-        run: |
-          set -e
-          echo "===== 1. Fixing possible nested userpatches ====="
-          if [ -d "userpatches/userpatches" ]; then
-            mv userpatches/userpatches/* userpatches/ 2>/dev/null || true
-            mv userpatches/userpatches/.[!.]* userpatches/ 2>/dev/null || true
-            rmdir userpatches/userpatches 2>/dev/null || true
-          fi
-
-          echo "===== 2. Creating board config ====="
+          echo "Creating board config"
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
           BOARD_NAME="RK3128 box"
@@ -51,165 +32,39 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config with GitHub kernel mirror ====="
+          echo "Creating family config"
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration
           KERNEL_MAJOR_MINOR="4.4"
           KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
           KERNELBRANCH="branch:master"
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
-          BOOTPATCHDIR="v2017.09"
           LDFLAGS="${LDFLAGS} -lgcc"
           family_tweaks() { :; }
           EOF
-
-          echo "===== 4. Creating user kernel config (disable BTRFS) ====="
-          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          CONFIG_ARM=y
-          CONFIG_ARCH_ROCKCHIP=y
-          CONFIG_ARCH_RK312X=y
-          CONFIG_EXT4_FS=y
-          # CONFIG_BTRFS_FS is not set
-          CONFIG_AEABI=y
-          CONFIG_FRAME_POINTER=y
-          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
-          EOF
-
-          echo "===== 5. Creating kernel config fragment ====="
-          mkdir -p userpatches/config/kernel
-          cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
-          CONFIG_BTRFS_FS=n
-          EOF
-
-          echo "===== 6. Creating kernel patches ====="
-          mkdir -p userpatches/kernel/archive/rk3128-4.4
-          
-          # Patch 1: Fix compiler-gcc13.h missing error
-          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
---- a/include/linux/compiler-gcc.h
-+++ b/include/linux/compiler-gcc.h
-@@ -97,7 +97,9 @@
- #endif
- #endif
- 
--#if GCC_VERSION >= 40600
-+#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
-+
-+#if defined(GCC_VERSION) && GCC_VERSION >= 40600
- #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
- #endif
-EOF
-
-          # Patch 2: Fix yylloc multiple definition error
-          cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
---- a/scripts/dtc/dtc-lexer.l
-+++ b/scripts/dtc/dtc-lexer.l
-@@ -20,10 +20,6 @@
- 
- #include "srcpos.h"
- #include "dtc-parser.tab.h"
--
--YYLTYPE yylloc;
--
- extern bool treesource_error;
- 
- /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
-EOF
-          echo "✅ Kernel patches created"
-          
-          # 验证补丁文件
-          echo "===== VERIFYING PATCH FILES ====="
-          if [ -f "userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch" ]; then
-            echo "✅ Patch 1 exists"
-            ls -la userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
-          else
-            echo "❌ Patch 1 MISSING"
-            exit 1
-          fi
-          
-          if [ -f "userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch" ]; then
-            echo "✅ Patch 2 exists"
-            ls -la userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
-          else
-            echo "❌ Patch 2 MISSING"
-            exit 1
-          fi
-
-          echo "===== 7. Creating CUPS install script ====="
-          cat > userpatches/customize-image.sh << 'EOF'
-          #!/bin/bash
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y cups cups-client cups-filters printer-driver-all hplip
-          cupsctl --remote-admin --remote-any --share-printers
-          if ! id "pi" &>/dev/null; then
-              useradd -m -G lpadmin -s /bin/bash pi
-              echo "pi:armbian" | chpasswd
-          fi
-          apt-get clean
-          EOF
-          chmod +x userpatches/customize-image.sh
-
-          echo "===== 8. Copying board and family configs ====="
-          mkdir -p config/boards config/sources/families
-          cp userpatches/boards/rk3128-box.conf config/boards/
-          cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-
-          echo "===== 9. FINAL VERIFICATION ====="
-          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo '❌ Not found')"
-          echo "Kernel patches directory: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo '❌ Not found')"
-          echo ""
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
-            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
-            udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
-            bison flex
+            device-tree-compiler pv bc build-essential git
 
-      - name: Clean cache
-        working-directory: armbian-build
-        run: rm -rf output/cache
-
-      - name: DEBUG - Check before compilation
-        working-directory: armbian-build
-        run: |
-          echo "===== PRE-COMPILATION CHECK ====="
-          echo "=== userpatches content ==="
-          ls -la userpatches/
-          echo "=== kernel patches ==="
-          ls -la userpatches/kernel/archive/rk3128-4.4/ || echo "No patches found"
-          echo "=== config files ==="
-          ls -la config/boards/ config/sources/families/ || echo "Configs missing"
-
-      - name: Build Armbian
+      - name: Build
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
           BRANCH: legacy
           RELEASE: bullseye
-          BUILD_MINIMAL: no
           BUILD_DESKTOP: no
           KERNEL_CONFIGURE: no
-          COMPRESS_OUTPUTIMAGE: sha,img
           ARCH: armhf
-          USERPATCHES_PATH: ./userpatches
-          IGNORE_UPDATES: yes
         run: |
-          echo "===== STARTING COMPILATION ====="
-          date
-          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
-          echo "===== COMPILATION FINISHED ====="
-          date
+          echo "Starting build..."
+          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE ARCH=$ARCH
 
-      - name: Upload firmware
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: armbian-rk3128-printserver
           path: armbian-build/output/images/*.img
-          retention-days: 7
