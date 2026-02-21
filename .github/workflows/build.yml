@@ -109,6 +109,14 @@ EOF
  /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
 EOF
           echo "✅ Kernel patches created"
+          
+          # 验证补丁文件
+          echo "===== Patch files created ====="
+          ls -la userpatches/kernel/archive/rk3128-4.4/
+          echo "===== Patch 1 content ====="
+          cat userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
+          echo "===== Patch 2 content ====="
+          cat userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
 
           echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
@@ -142,7 +150,7 @@ EOF
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian
+      - name: Build Armbian with patch debugging
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -155,7 +163,44 @@ EOF
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
-        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
+        run: |
+          # 显示当前目录结构
+          echo "===== Current directory ====="
+          pwd
+          
+          # 显示补丁目录内容
+          echo "===== Kernel patches directory ====="
+          ls -la userpatches/kernel/archive/rk3128-4.4/
+          
+          # 显示补丁内容
+          echo "===== Patch 1 content ====="
+          cat userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
+          
+          echo "===== Patch 2 content ====="
+          cat userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
+          
+          # 检查内核源码目录
+          echo "===== Checking kernel source ====="
+          if [ -d "cache/sources" ]; then
+            echo "cache/sources exists"
+            ls -la cache/sources/
+          else
+            echo "cache/sources not found yet"
+          fi
+          
+          # 运行编译并捕获详细输出
+          echo "===== Starting compilation ====="
+          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH 2>&1 | tee compile.log
+          
+          # 检查编译是否成功
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ Compilation failed with exit code ${PIPESTATUS[0]}"
+            echo "===== Last 100 lines of compile.log ====="
+            tail -100 compile.log
+            exit ${PIPESTATUS[0]}
+          fi
+          
+          echo "✅ Compilation successful!"
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
