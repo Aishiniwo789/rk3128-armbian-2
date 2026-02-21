@@ -107,14 +107,13 @@ jobs:
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
-      - name: Install dependencies with older bison/flex
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          # 安装特定版本的bison和flex以兼容旧内核
           sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
-               device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
-               udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
-               bison=2:3.8.2+dfsg-1build1 flex
+            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
+            udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
+            bison flex
 
       - name: Clean cache
         working-directory: armbian-build
@@ -133,8 +132,9 @@ jobs:
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
+          # 添加 KCFLAGS 解决 gcc-10 编译问题
           KCFLAGS: "-fcommon"
-       run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
+        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
