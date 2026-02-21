@@ -81,7 +81,38 @@ jobs:
           CONFIG_BTRFS_FS=n
           EOF
 
-          echo "===== 6. Creating CUPS install script ====="
+          echo "===== 6. Creating kernel patch to fix gcc13 header issue ====="
+          mkdir -p userpatches/kernel/archive/rk3128-4.4
+          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-header.patch << 'EOF'
+          --- a/include/linux/compiler-gcc.h
+          +++ b/include/linux/compiler-gcc.h
+          @@ -100,6 +100,8 @@
+           #endif
+           #endif
+           
+          +#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+          +
+           #if GCC_VERSION >= 40600
+           #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+           #endif
+          EOF
+
+          echo "===== 7. Creating kernel patch to add -fcommon to DTC flags ====="
+          cat > userpatches/kernel/archive/rk3128-4.4/0002-dtc-add-fcommon.patch << 'EOF'
+          --- a/scripts/dtc/Makefile
+          +++ b/scripts/dtc/Makefile
+          @@ -1,6 +1,8 @@
+           # scripts/dtc/Makefile
+           
+           HOST_EXTRACFLAGS += -I$(src)/libfdt
+          +# Add -fcommon to fix yylloc multiple definition with gcc 10+
+          +HOSTCFLAGS_dtc-parser.tab.o += -fcommon
+           
+           ifeq ($(CONFIG_DTC),y)
+           obj-$(CONFIG_DTC) += dtc.o
+          EOF
+
+          echo "===== 8. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -96,15 +127,16 @@ jobs:
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 7. Copying board and family configs ====="
+          echo "===== 9. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
 
-          echo "===== 8. Final verification ====="
+          echo "===== 10. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel patches: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
@@ -132,8 +164,6 @@ jobs:
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
-          # 添加 KCFLAGS 解决 gcc-10 编译问题
-          KCFLAGS: "-fcommon"
         run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
       - name: Upload firmware
