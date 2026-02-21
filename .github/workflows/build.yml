@@ -21,6 +21,15 @@ jobs:
         with:
           path: armbian-build/userpatches
 
+      - name: DEBUG - Show initial structure
+        working-directory: armbian-build
+        run: |
+          echo "===== INITIAL STRUCTURE ====="
+          pwd
+          ls -la
+          echo "===== userpatches content ====="
+          ls -la userpatches/ || echo "userpatches empty"
+
       - name: Fix nested structure and provide basic config
         working-directory: armbian-build
         run: |
@@ -111,12 +120,22 @@ EOF
           echo "✅ Kernel patches created"
           
           # 验证补丁文件
-          echo "===== Patch files created ====="
-          ls -la userpatches/kernel/archive/rk3128-4.4/
-          echo "===== Patch 1 content ====="
-          cat userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
-          echo "===== Patch 2 content ====="
-          cat userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
+          echo "===== VERIFYING PATCH FILES ====="
+          if [ -f "userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch" ]; then
+            echo "✅ Patch 1 exists"
+            ls -la userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
+          else
+            echo "❌ Patch 1 MISSING"
+            exit 1
+          fi
+          
+          if [ -f "userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch" ]; then
+            echo "✅ Patch 2 exists"
+            ls -la userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
+          else
+            echo "❌ Patch 2 MISSING"
+            exit 1
+          fi
 
           echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
@@ -138,6 +157,13 @@ EOF
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
 
+          echo "===== 9. FINAL VERIFICATION ====="
+          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
+          echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo '❌ Not found')"
+          echo "Kernel patches directory: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo '❌ Not found')"
+          echo ""
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -150,7 +176,18 @@ EOF
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with patch debugging
+      - name: DEBUG - Check before compilation
+        working-directory: armbian-build
+        run: |
+          echo "===== PRE-COMPILATION CHECK ====="
+          echo "=== userpatches content ==="
+          ls -la userpatches/
+          echo "=== kernel patches ==="
+          ls -la userpatches/kernel/archive/rk3128-4.4/ || echo "No patches found"
+          echo "=== config files ==="
+          ls -la config/boards/ config/sources/families/ || echo "Configs missing"
+
+      - name: Build Armbian
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -164,43 +201,11 @@ EOF
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
         run: |
-          # 显示当前目录结构
-          echo "===== Current directory ====="
-          pwd
-          
-          # 显示补丁目录内容
-          echo "===== Kernel patches directory ====="
-          ls -la userpatches/kernel/archive/rk3128-4.4/
-          
-          # 显示补丁内容
-          echo "===== Patch 1 content ====="
-          cat userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch
-          
-          echo "===== Patch 2 content ====="
-          cat userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch
-          
-          # 检查内核源码目录
-          echo "===== Checking kernel source ====="
-          if [ -d "cache/sources" ]; then
-            echo "cache/sources exists"
-            ls -la cache/sources/
-          else
-            echo "cache/sources not found yet"
-          fi
-          
-          # 运行编译并捕获详细输出
-          echo "===== Starting compilation ====="
-          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH 2>&1 | tee compile.log
-          
-          # 检查编译是否成功
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Compilation failed with exit code ${PIPESTATUS[0]}"
-            echo "===== Last 100 lines of compile.log ====="
-            tail -100 compile.log
-            exit ${PIPESTATUS[0]}
-          fi
-          
-          echo "✅ Compilation successful!"
+          echo "===== STARTING COMPILATION ====="
+          date
+          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
+          echo "===== COMPILATION FINISHED ====="
+          date
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
