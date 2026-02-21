@@ -50,7 +50,7 @@ jobs:
           # Kernel settings
           KERNEL_MAJOR_MINOR="4.4"
           KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
-          KERNELBRANCH="branch:master"  # 明确指定分支
+          KERNELBRANCH="branch:master"
           
           # U-Boot settings
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
@@ -107,8 +107,14 @@ jobs:
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support debootstrap device-tree-compiler pv bc build-essential git dosfstools uuid-runtime udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross
+      - name: Install dependencies with older bison/flex
+        run: |
+          sudo apt-get update
+          # 安装特定版本的bison和flex以兼容旧内核
+          sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
+            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
+            udev kmod cpio gcc-arm-linux-gnueabihf libgcc-10-dev-armhf-cross \
+            bison=2:3.8.2-1build2 flex=2.6.4-8build2
 
       - name: Clean cache
         working-directory: armbian-build
