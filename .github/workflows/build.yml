@@ -35,51 +35,51 @@ jobs:
           echo "===== 2. Creating board config ====="
           mkdir -p userpatches/boards
           cat > userpatches/boards/rk3128-box.conf << 'EOF'
-          BOARD_NAME="RK3128 box"
-          BOARDFAMILY="rk3128"
-          ARCH="armhf"
-          BRANCH="legacy"
-          KERNEL_TARGET="legacy"
-          EOF
+BOARD_NAME="RK3128 box"
+BOARDFAMILY="rk3128"
+ARCH="armhf"
+BRANCH="legacy"
+KERNEL_TARGET="legacy"
+EOF
 
           echo "===== 3. Creating family config with GitHub kernel mirror ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration using GitHub kernel mirror
-          
-          # Kernel settings
-          KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
-          KERNELBRANCH="branch:master"
-          
-          # U-Boot settings
-          BOOTSOURCE="https://github.com/u-boot/u-boot.git"
-          BOOTBRANCH="tag:v2017.09"
-          BOOTPATCHDIR="v2017.09"
-          
-          # Add global linker flag to fix __aeabi_uldivmod
-          LDFLAGS="${LDFLAGS} -lgcc"
-          
-          family_tweaks() { :; }
-          EOF
+# Rockchip RK3128 family configuration using GitHub kernel mirror
+
+# Kernel settings
+KERNEL_MAJOR_MINOR="4.4"
+KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
+KERNELBRANCH="branch:master"
+
+# U-Boot settings
+BOOTSOURCE="https://github.com/u-boot/u-boot.git"
+BOOTBRANCH="tag:v2017.09"
+BOOTPATCHDIR="v2017.09"
+
+# Add global linker flag to fix __aeabi_uldivmod
+LDFLAGS="${LDFLAGS} -lgcc"
+
+family_tweaks() { :; }
+EOF
 
           echo "===== 4. Creating user kernel config (disable BTRFS) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
-          CONFIG_ARM=y
-          CONFIG_ARCH_ROCKCHIP=y
-          CONFIG_ARCH_RK312X=y
-          CONFIG_EXT4_FS=y
-          # CONFIG_BTRFS_FS is not set
-          CONFIG_AEABI=y
-          CONFIG_FRAME_POINTER=y
-          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
-          EOF
+CONFIG_ARM=y
+CONFIG_ARCH_ROCKCHIP=y
+CONFIG_ARCH_RK312X=y
+CONFIG_EXT4_FS=y
+# CONFIG_BTRFS_FS is not set
+CONFIG_AEABI=y
+CONFIG_FRAME_POINTER=y
+CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+EOF
 
           echo "===== 5. Creating kernel config fragment ====="
           mkdir -p userpatches/config/kernel
           cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
-          CONFIG_BTRFS_FS=n
-          EOF
+CONFIG_BTRFS_FS=n
+EOF
 
           echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
           mkdir -p userpatches/kernel/archive/rk3128-4.4
@@ -119,17 +119,17 @@ EOF
 
           echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
-          #!/bin/bash
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y cups cups-client cups-filters printer-driver-all hplip
-          cupsctl --remote-admin --remote-any --share-printers
-          if ! id "pi" &>/dev/null; then
-              useradd -m -G lpadmin -s /bin/bash pi
-              echo "pi:armbian" | chpasswd
-          fi
-          apt-get clean
-          EOF
+#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y cups cups-client cups-filters printer-driver-all hplip
+cupsctl --remote-admin --remote-any --share-printers
+if ! id "pi" &>/dev/null; then
+    useradd -m -G lpadmin -s /bin/bash pi
+    echo "pi:armbian" | chpasswd
+fi
+apt-get clean
+EOF
           chmod +x userpatches/customize-image.sh
 
           echo "===== 8. Copying board and family configs ====="
