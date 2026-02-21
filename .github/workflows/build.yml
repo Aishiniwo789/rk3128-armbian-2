@@ -81,11 +81,11 @@ jobs:
           CONFIG_BTRFS_FS=n
           EOF
 
-echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
-mkdir -p userpatches/kernel/archive/rk3128-4.4
-
-# Patch 1: Fix compiler-gcc13.h missing error - 使用更通用的格式
-cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
+          echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
+          mkdir -p userpatches/kernel/archive/rk3128-4.4
+          
+          # Patch 1: Fix compiler-gcc13.h missing error
+          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
 --- a/include/linux/compiler-gcc.h
 +++ b/include/linux/compiler-gcc.h
 @@ -97,7 +97,9 @@
@@ -100,8 +100,8 @@ cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch <
  #endif
 EOF
 
-# Patch 2: Fix yylloc multiple definition error - 使用更通用的格式
-cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
+          # Patch 2: Fix yylloc multiple definition error
+          cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
 --- a/scripts/dtc/dtc-lexer.l
 +++ b/scripts/dtc/dtc-lexer.l
 @@ -20,10 +20,6 @@
@@ -115,7 +115,7 @@ cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yy
  
  /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
 EOF
-echo "✅ Kernel patches created with more generic context"
+          echo "✅ Kernel patches created"
 
           echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
@@ -132,7 +132,7 @@ echo "✅ Kernel patches created with more generic context"
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 8. Copying configs to official paths ====="
+          echo "===== 8. Copying board and family configs ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
