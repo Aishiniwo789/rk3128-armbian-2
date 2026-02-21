@@ -21,6 +21,28 @@ jobs:
         with:
           path: armbian-build/userpatches
 
+      - name: MANUALLY clone kernel source
+        working-directory: armbian-build
+        run: |
+          set -e
+          echo "===== Manually cloning kernel source ====="
+          # 创建源码目录
+          mkdir -p cache/sources
+          
+          # 手动克隆内核
+          git clone --depth 1 https://github.com/Aishiniwo789/firefly-rk3128.git cache/sources/firefly-rk3128
+          
+          # 验证克隆结果
+          if [ -d "cache/sources/firefly-rk3128" ]; then
+            echo "✅ Kernel source cloned successfully"
+            ls -la cache/sources/firefly-rk3128/
+            echo "Kernel version:"
+            cat cache/sources/firefly-rk3128/Makefile | grep -E "^VERSION|^PATCHLEVEL|^SUBLEVEL|^EXTRAVERSION" || true
+          else
+            echo "❌ Kernel source clone failed"
+            exit 1
+          fi
+
       - name: Provide FINAL configuration
         working-directory: armbian-build
         run: |
@@ -42,15 +64,14 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config with GitHub kernel mirror ====="
+          echo "===== 3. Creating family config with LOCAL kernel source ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration using GitHub kernel mirror
+          # Rockchip RK3128 family configuration using LOCAL kernel source
           
-          # Kernel settings
+          # Kernel settings - use local path
           KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
-          KERNELBRANCH="branch:master"
+          KERNELSOURCE="cache/sources/firefly-rk3128"
           
           # U-Boot settings
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
@@ -142,6 +163,7 @@ EOF
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo "Kernel patches: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo 'Not found')"
+          echo "Local kernel source: $(ls -la cache/sources/firefly-rk3128/Makefile 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
@@ -156,7 +178,7 @@ EOF
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with GitHub kernel mirror
+      - name: Build Armbian with LOCAL kernel source
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -175,13 +197,14 @@ EOF
           pwd
           ls -la
           
-          # 检查内核源码目录
-          echo "===== Checking kernel source directory ====="
-          if [ -d "cache/sources" ]; then
-            echo "✅ cache/sources exists"
-            ls -la cache/sources/
+          # 检查本地内核源码
+          echo "===== Checking LOCAL kernel source ====="
+          if [ -d "cache/sources/firefly-rk3128" ]; then
+            echo "✅ Local kernel source found"
+            ls -la cache/sources/firefly-rk3128/ | head -20
           else
-            echo "❌ cache/sources not found"
+            echo "❌ Local kernel source NOT found"
+            exit 1
           fi
           
           # 检查补丁目录
@@ -195,7 +218,7 @@ EOF
           
           # 运行编译并捕获所有输出
           echo "===== Starting compilation ====="
-          ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH 2>&1 | tee compile.log
+          time ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH 2>&1 | tee compile.log
           
           # 检查编译是否成功
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
