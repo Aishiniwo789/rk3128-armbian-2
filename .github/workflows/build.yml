@@ -81,7 +81,42 @@ jobs:
           CONFIG_BTRFS_FS=n
           EOF
 
-          echo "===== 6. Creating CUPS install script ====="
+          echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
+          mkdir -p userpatches/kernel/archive/rk3128-4.4
+          
+          # Patch 1: Fix compiler-gcc13.h missing error by ensuring GCC_VERSION is defined
+          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
+          --- a/include/linux/compiler-gcc.h
+          +++ b/include/linux/compiler-gcc.h
+          @@ -100,7 +100,9 @@
+           #endif
+           #endif
+           
+          -#if GCC_VERSION >= 40600
+          +#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+          +
+          +#if defined(GCC_VERSION) && GCC_VERSION >= 40600
+           #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+           #endif
+          EOF
+
+          # Patch 2: Fix yylloc multiple definition error by removing redundant declaration
+          # This is the exact fix merged into the mainline kernel [citation:3][citation:5][citation:8]
+          cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
+          --- a/scripts/dtc/dtc-lexer.l
+          +++ b/scripts/dtc/dtc-lexer.l
+          @@ -23,7 +23,6 @@
+           #include "srcpos.h"
+           #include "dtc-parser.tab.h"
+           
+          -YYLTYPE yylloc;
+           extern bool treesource_error;
+           
+           /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
+          EOF
+          echo "✅ Kernel patches created"
+
+          echo "===== 7. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -96,15 +131,16 @@ jobs:
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 7. Copying board and family configs ====="
+          echo "===== 8. Copying configs to official paths ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
 
-          echo "===== 8. Final verification ====="
+          echo "===== 9. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
           echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
+          echo "Kernel patches: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo 'Not found')"
           echo ""
 
       - name: Install dependencies
@@ -132,9 +168,6 @@ jobs:
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
-          # 使用环境变量传递编译标志，避免补丁失败
-          KCFLAGS: "-fcommon"
-          HOSTCFLAGS: "-fcommon"
         run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
       - name: Upload firmware
