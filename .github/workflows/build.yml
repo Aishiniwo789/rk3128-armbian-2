@@ -42,23 +42,28 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config with your GitHub kernel mirror ====="
+          echo "===== 3. Creating family config with GitHub kernel mirror ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
           # Rockchip RK3128 family configuration using GitHub kernel mirror
+          
+          # Kernel settings
           KERNEL_MAJOR_MINOR="4.4"
-          # 使用您在GitHub上的镜像仓库
           KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
-          # 不指定分支，让系统拉取默认分支（通常是master或main）
+          KERNELBRANCH="branch:master"  # 明确指定分支
+          
+          # U-Boot settings
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          # 添加全局链接器标志，修复 __aeabi_uldivmod
+          
+          # Add global linker flag to fix __aeabi_uldivmod
           LDFLAGS="${LDFLAGS} -lgcc"
+          
           family_tweaks() { :; }
           EOF
 
-          echo "===== 4. Creating user kernel config (禁用BTRFS) ====="
+          echo "===== 4. Creating user kernel config (disable BTRFS) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
@@ -98,7 +103,7 @@ jobs:
 
           echo "===== 8. Final verification ====="
           echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -3)"
+          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
           echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
           echo ""
 
