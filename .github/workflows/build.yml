@@ -21,29 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: MANUALLY clone kernel source
-        working-directory: armbian-build
-        run: |
-          set -e
-          echo "===== Manually cloning kernel source ====="
-          # 创建源码目录
-          mkdir -p cache/sources
-          
-          # 手动克隆内核
-          git clone --depth 1 https://github.com/Aishiniwo789/firefly-rk3128.git cache/sources/firefly-rk3128
-          
-          # 验证克隆结果
-          if [ -d "cache/sources/firefly-rk3128" ]; then
-            echo "✅ Kernel source cloned successfully"
-            ls -la cache/sources/firefly-rk3128/
-            echo "Kernel version:"
-            cat cache/sources/firefly-rk3128/Makefile | grep -E "^VERSION|^PATCHLEVEL|^SUBLEVEL|^EXTRAVERSION" || true
-          else
-            echo "❌ Kernel source clone failed"
-            exit 1
-          fi
-
-      - name: Provide FINAL configuration
+      - name: Fix nested structure and provide basic config
         working-directory: armbian-build
         run: |
           set -e
@@ -64,23 +42,17 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config with LOCAL kernel source ====="
+          echo "===== 3. Creating family config with GitHub kernel mirror ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration using LOCAL kernel source
-          
-          # Kernel settings - use local path
+          # Rockchip RK3128 family configuration
           KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="cache/sources/firefly-rk3128"
-          
-          # U-Boot settings
+          KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
+          KERNELBRANCH="branch:master"
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          
-          # Add global linker flag to fix __aeabi_uldivmod
           LDFLAGS="${LDFLAGS} -lgcc"
-          
           family_tweaks() { :; }
           EOF
 
@@ -96,49 +68,7 @@ jobs:
           CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
           EOF
 
-          echo "===== 5. Creating kernel config fragment ====="
-          mkdir -p userpatches/config/kernel
-          cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
-          CONFIG_BTRFS_FS=n
-          EOF
-
-          echo "===== 6. Creating kernel patches for GCC 13 and dtc yylloc fix ====="
-          mkdir -p userpatches/kernel/archive/rk3128-4.4
-          
-          # Patch 1: Fix compiler-gcc13.h missing error
-          cat > userpatches/kernel/archive/rk3128-4.4/0001-fix-compiler-gcc-header.patch << 'EOF'
---- a/include/linux/compiler-gcc.h
-+++ b/include/linux/compiler-gcc.h
-@@ -97,7 +97,9 @@
- #endif
- #endif
- 
--#if GCC_VERSION >= 40600
-+#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
-+
-+#if defined(GCC_VERSION) && GCC_VERSION >= 40600
- #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
- #endif
-EOF
-
-          # Patch 2: Fix yylloc multiple definition error
-          cat > userpatches/kernel/archive/rk3128-4.4/0002-scripts-dtc-remove-redundant-yylloc.patch << 'EOF'
---- a/scripts/dtc/dtc-lexer.l
-+++ b/scripts/dtc/dtc-lexer.l
-@@ -20,10 +20,6 @@
- 
- #include "srcpos.h"
- #include "dtc-parser.tab.h"
--
--YYLTYPE yylloc;
--
- extern bool treesource_error;
- 
- /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
-EOF
-          echo "✅ Kernel patches created"
-
-          echo "===== 7. Creating CUPS install script ====="
+          echo "===== 5. Creating CUPS install script ====="
           cat > userpatches/customize-image.sh << 'EOF'
           #!/bin/bash
           export DEBIAN_FRONTEND=noninteractive
@@ -153,18 +83,10 @@ EOF
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 8. Copying board and family configs ====="
+          echo "===== 6. Copying board and family configs ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
-
-          echo "===== 9. Final verification ====="
-          echo "Board config: $(cat config/boards/rk3128-box.conf 2>/dev/null | head -3)"
-          echo "Family config: $(cat config/sources/families/rk3128.conf 2>/dev/null | head -5)"
-          echo "User kernel config: $(ls -la userpatches/linux-rk3128-legacy.config 2>/dev/null || echo 'Not found')"
-          echo "Kernel patches: $(ls -la userpatches/kernel/archive/rk3128-4.4/ 2>/dev/null || echo 'Not found')"
-          echo "Local kernel source: $(ls -la cache/sources/firefly-rk3128/Makefile 2>/dev/null || echo 'Not found')"
-          echo ""
 
       - name: Install dependencies
         run: |
@@ -178,7 +100,7 @@ EOF
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with LOCAL kernel source
+      - name: Build Armbian
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
@@ -191,44 +113,7 @@ EOF
           ARCH: armhf
           USERPATCHES_PATH: ./userpatches
           IGNORE_UPDATES: yes
-        run: |
-          # 显示当前目录结构
-          echo "===== Current directory structure ====="
-          pwd
-          ls -la
-          
-          # 检查本地内核源码
-          echo "===== Checking LOCAL kernel source ====="
-          if [ -d "cache/sources/firefly-rk3128" ]; then
-            echo "✅ Local kernel source found"
-            ls -la cache/sources/firefly-rk3128/ | head -20
-          else
-            echo "❌ Local kernel source NOT found"
-            exit 1
-          fi
-          
-          # 检查补丁目录
-          echo "===== Checking patch directory ====="
-          if [ -d "userpatches/kernel/archive/rk3128-4.4" ]; then
-            echo "✅ Patch directory exists"
-            ls -la userpatches/kernel/archive/rk3128-4.4/
-          else
-            echo "❌ Patch directory not found"
-          fi
-          
-          # 运行编译并捕获所有输出
-          echo "===== Starting compilation ====="
-          time ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH 2>&1 | tee compile.log
-          
-          # 检查编译是否成功
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Compilation failed with exit code ${PIPESTATUS[0]}"
-            echo "===== Last 50 lines of compile.log ====="
-            tail -50 compile.log
-            exit ${PIPESTATUS[0]}
-          fi
-          
-          echo "✅ Compilation successful!"
+        run: ./compile.sh BOARD=$BOARD BRANCH=$BRANCH RELEASE=$RELEASE BUILD_MINIMAL=$BUILD_MINIMAL BUILD_DESKTOP=$BUILD_DESKTOP KERNEL_CONFIGURE=$KERNEL_CONFIGURE COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE ARCH=$ARCH
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
