@@ -21,7 +21,7 @@ jobs:
         with:
           path: armbian-build/userpatches
 
-      - name: Fix nested structure and provide FINAL configuration
+      - name: Provide FINAL configuration
         working-directory: armbian-build
         run: |
           set -e
@@ -42,22 +42,23 @@ jobs:
           KERNEL_TARGET="legacy"
           EOF
 
-          echo "===== 3. Creating family config with Firefly kernel ====="
+          echo "===== 3. Creating family config with your GitHub kernel mirror ====="
           mkdir -p userpatches/config/sources/families
           cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
-          # Rockchip RK3128 family configuration using Firefly kernel
+          # Rockchip RK3128 family configuration using GitHub kernel mirror
           KERNEL_MAJOR_MINOR="4.4"
-          KERNELSOURCE="https://bitbucket.org/T-Firefly/fireprime-kernel.git"
-          KERNELBRANCH="branch:master"
+          # 使用您在GitHub上的镜像仓库
+          KERNELSOURCE="https://github.com/Aishiniwo789/firefly-rk3128.git"
+          # 不指定分支，让系统拉取默认分支（通常是master或main）
           BOOTSOURCE="https://github.com/u-boot/u-boot.git"
           BOOTBRANCH="tag:v2017.09"
           BOOTPATCHDIR="v2017.09"
-          # Add global linker flag to fix __aeabi_uldivmod
+          # 添加全局链接器标志，修复 __aeabi_uldivmod
           LDFLAGS="${LDFLAGS} -lgcc"
           family_tweaks() { :; }
           EOF
 
-          echo "===== 4. Creating user kernel config (disable BTRFS) ====="
+          echo "===== 4. Creating user kernel config (禁用BTRFS) ====="
           cat > userpatches/linux-rk3128-legacy.config << 'EOF'
           CONFIG_ARM=y
           CONFIG_ARCH_ROCKCHIP=y
@@ -90,7 +91,7 @@ jobs:
           EOF
           chmod +x userpatches/customize-image.sh
 
-          echo "===== 7. Copying configs to official paths ====="
+          echo "===== 7. Copying board and family configs ====="
           mkdir -p config/boards config/sources/families
           cp userpatches/boards/rk3128-box.conf config/boards/
           cp userpatches/config/sources/families/rk3128.conf config/sources/families/
@@ -108,7 +109,7 @@ jobs:
         working-directory: armbian-build
         run: rm -rf output/cache
 
-      - name: Build Armbian with Firefly kernel
+      - name: Build Armbian with GitHub kernel mirror
         working-directory: armbian-build
         env:
           BOARD: rk3128-box
