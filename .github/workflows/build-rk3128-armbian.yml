@@ -1,7 +1,7 @@
 name: Build Armbian for RK3128 with CUPS
 
 on:
-  workflow_dispatch: # 手动触发
+  workflow_dispatch:
   push:
     branches: [ main ]
 
@@ -24,7 +24,7 @@ jobs:
           remove-android: true
           remove-haskell: true
 
-      - name: Install dependencies (single line)
+      - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools
 
       - name: Setup ccache environment
@@ -37,7 +37,7 @@ jobs:
         run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
 
       - name: Download Rockchip kernel source
-        run: git clone --depth=1 --branch master https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
+        run: git clone --depth=1 --branch main https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
 
       - name: Configure kernel for RK3128
         run: |
@@ -50,7 +50,7 @@ jobs:
         run: echo 'DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
 
       - name: Start Armbian compilation for RK3128
-        run: cd buildroot && sudo ./rebuild -d -b rk3128 -k rockchip -v jammy -a arm64 -s on
+        run: cd buildroot && sudo ./rebuild -d -b rk3128 -k main -v jammy -a arm64 -s on
 
       - name: Upload Armbian image
         uses: actions/upload-artifact@v4
