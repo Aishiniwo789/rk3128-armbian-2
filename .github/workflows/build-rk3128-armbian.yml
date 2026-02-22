@@ -7,6 +7,7 @@ on:
 
 env:
   TZ: Asia/Shanghai
+  KERNEL_VERSION: 5.10.251  # 使用最新的可用版本
 
 jobs:
   build:
@@ -51,7 +52,7 @@ jobs:
       - name: Add RK3128 to model_database.conf
         run: |
           echo '# Custom RK3128 entry' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
-          echo 'r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/5.10.y:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          echo "r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/${KERNEL_VERSION}:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes" >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
           cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
 
       - name: Create output directory
@@ -66,7 +67,7 @@ jobs:
           ls -la
 
       - name: Start Armbian compilation for RK3128
-        run: cd buildroot && sudo ./rebuild -b rk3128 -k 5.10 -a arm64 -s on
+        run: cd buildroot && sudo ./rebuild -b rk3128 -k ${KERNEL_VERSION} -a arm64 -s on
 
       - name: Upload Armbian image
         uses: actions/upload-artifact@v4
