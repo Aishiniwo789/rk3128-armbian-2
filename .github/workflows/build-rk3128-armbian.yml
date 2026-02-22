@@ -36,8 +36,8 @@ jobs:
       - name: Clone Armbian build script
         run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
 
-      - name: Download Rockchip kernel source (develop-4.4 branch)
-        run: git clone --depth=1 --branch develop-4.4 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
+      - name: Download Rockchip kernel source (develop-5.10 branch)
+        run: git clone --depth=1 --branch develop-5.10 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
 
       - name: Create kernel config directory and set configuration
         run: mkdir -p buildroot/build/config && echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
@@ -51,7 +51,7 @@ jobs:
       - name: Add RK3128 to model_database.conf
         run: |
           echo '# Custom RK3128 entry' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
-          echo 'r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/4.4.y:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          echo 'r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/5.10.y:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
           cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
 
       - name: Create output directory
@@ -60,16 +60,13 @@ jobs:
       - name: Download and prepare base Armbian image
         run: |
           cd buildroot/build/output/images/
-          # 下载镜像
           wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          # 解压
           gunzip -f Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          # 重命名为脚本能识别的格式（关键修复）
           mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
           ls -la
 
       - name: Start Armbian compilation for RK3128
-        run: cd buildroot && sudo ./rebuild -b rk3128 -k 4.4 -a arm64 -s on
+        run: cd buildroot && sudo ./rebuild -b rk3128 -k 5.10 -a arm64 -s on
 
       - name: Upload Armbian image
         uses: actions/upload-artifact@v4
