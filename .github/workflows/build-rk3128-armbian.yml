@@ -25,7 +25,7 @@ jobs:
           remove-haskell: true
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget
+        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget curl
 
       - name: Setup ccache environment
         uses: hendrikmuhs/ccache-action@v1.2
@@ -54,11 +54,20 @@ jobs:
           echo 'r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/4.4.y:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
           cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
 
-      - name: Download base Armbian image
+      - name: Create output directory
+        run: mkdir -p buildroot/build/output/images/
+
+      - name: Download base Armbian image with retry
         run: |
-          mkdir -p buildroot/build/output/images/
-          wget -q --show-progress https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2026.01/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz -O /tmp/base-armbian.img.gz
-          gunzip -c /tmp/base-armbian.img.gz > buildroot/build/output/images/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img
+          cd buildroot/build/output/images/
+          # 尝试多个可能的下载源
+          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2026.01/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz || \
+          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2025.12/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz || \
+          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2025.11/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz
+          gunzip -f *.img.gz
+
+      - name: List downloaded files
+        run: ls -la buildroot/build/output/images/
 
       - name: Start Armbian compilation for RK3128
         run: cd buildroot && sudo ./rebuild -b rk3128 -k 4.4 -a arm64 -s on
