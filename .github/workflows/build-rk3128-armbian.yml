@@ -57,17 +57,12 @@ jobs:
       - name: Create output directory
         run: mkdir -p buildroot/build/output/images/
 
-      - name: Download base Armbian image with retry
+      - name: Download base Armbian image
         run: |
           cd buildroot/build/output/images/
-          # 尝试多个可能的下载源
-          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2026.01/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz || \
-          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2025.12/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz || \
-          wget --tries=3 --timeout=30 https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_save_2025.11/Armbian_24.11.0-trunk_Jammy_current_6.1.119_amlogic_s905x3.img.gz
+          wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
           gunzip -f *.img.gz
-
-      - name: List downloaded files
-        run: ls -la buildroot/build/output/images/
+          ls -la
 
       - name: Start Armbian compilation for RK3128
         run: cd buildroot && sudo ./rebuild -b rk3128 -k 4.4 -a arm64 -s on
