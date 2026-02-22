@@ -39,20 +39,14 @@ jobs:
       - name: Download Rockchip kernel source (develop-4.4 branch)
         run: git clone --depth=1 --branch develop-4.4 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
 
-      - name: Configure kernel for RK3128
-        run: |
-          mkdir -p buildroot/output
-          echo "CONFIG_MACH_RK3128=y" > buildroot/build/config/kernel-rockchip.config
-          echo "CONFIG_USB_PRINTER=y" >> buildroot/build/config/kernel-rockchip.config
-          echo "CONFIG_USB_NET_DRIVERS=y" >> buildroot/build/config/kernel-rockchip.config
-          echo "CONFIG_PHY_ROCKCHIP_INNO_USB2=y" >> buildroot/build/config/kernel-rockchip.config
-          echo "CONFIG_ROCKCHIP_PHY=y" >> buildroot/build/config/kernel-rockchip.config
+      - name: Create kernel config directory and set configuration
+        run: mkdir -p buildroot/build/config && echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
 
       - name: Create custom package install script (CUPS integration)
-        run: echo 'DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
+        run: mkdir -p buildroot/build/customize && echo 'DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
 
       - name: Verify RK3128 device tree files
-        run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "Checking arm64 dir..." && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No rockchip dts found"
+        run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
 
       - name: Start Armbian compilation for RK3128
         run: cd buildroot && sudo ./rebuild -d -b rk3128 -k 4.4 -v jammy -a arm64 -s on
