@@ -48,6 +48,12 @@ jobs:
       - name: Verify RK3128 device tree files
         run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
 
+      - name: Add RK3128 to model_database.conf
+        run: |
+          echo '# Custom RK3128 entry' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          echo 'r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/4.4.y:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
+
       - name: Start Armbian compilation for RK3128
         run: cd buildroot && sudo ./rebuild -b rk3128 -k 4.4 -a arm64 -s on
 
