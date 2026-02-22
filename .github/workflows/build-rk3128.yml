@@ -1,0 +1,129 @@
+name: Build RK3128 Print Server with Armbian
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Armbian build framework
+        uses: actions/checkout@v4
+        with:
+          repository: armbian/build
+          path: armbian-build
+          # 使用稳定分支以获得更好的兼容性 [citation:5]
+          ref: v24.11
+
+      - name: Prepare userpatches configuration
+        working-directory: armbian-build
+        run: |
+          set -e
+          # 创建板级配置 (Board config)
+          mkdir -p userpatches/boards
+          cat > userpatches/boards/rk3128-box.conf << 'EOF'
+          # RK3128 电视盒子板级配置
+          BOARD_NAME="RK3128 box"
+          BOARDFAMILY="rk3128"
+          ARCH="armhf"
+          BRANCH="legacy"
+          KERNEL_TARGET="legacy"
+          EOF
+          echo "✅ Board config created."
+
+          # 创建家族配置 (Family config) - 使用 Rockchip 官方内核源
+          mkdir -p userpatches/config/sources/families
+          cat > userpatches/config/sources/families/rk3128.conf << 'EOF'
+          # Rockchip RK3128 家族配置 - 使用官方内核
+          KERNEL_MAJOR_MINOR="4.4"
+          # 使用 Rockchip 官方内核仓库的 develop-4.4 分支
+          KERNELSOURCE="https://github.com/rockchip-linux/kernel.git"
+          KERNELBRANCH="branch:develop-4.4"
+          # U-Boot 配置
+          BOOTSOURCE="https://github.com/u-boot/u-boot.git"
+          BOOTBRANCH="tag:v2017.09"
+          # 添加链接标志以修复 ARM32 上的 __aeabi_uldivmod 错误
+          LDFLAGS="\${LDFLAGS} -lgcc"
+          family_tweaks() { :; }
+          EOF
+          echo "✅ Family config created with Rockchip kernel source."
+
+          # 创建用户内核配置 (User kernel config) - 明确禁用 BTRFS
+          cat > userpatches/linux-rk3128-legacy.config << 'EOF'
+          CONFIG_ARM=y
+          CONFIG_ARCH_ROCKCHIP=y
+          CONFIG_ARCH_RK312X=y
+          CONFIG_EXT4_FS=y
+          # CONFIG_BTRFS_FS is not set
+          CONFIG_AEABI=y
+          CONFIG_CMDLINE="console=ttyFIQ0 earlyprintk root=/dev/mmcblk0p3 rootwait"
+          EOF
+          echo "✅ Kernel config created with BTRFS disabled."
+
+          # 创建内核配置片段 (Kernel config fragment) - 额外保险
+          mkdir -p userpatches/config/kernel
+          cat > userpatches/config/kernel/linux-rk3128-legacy.fragment << 'EOF'
+          CONFIG_BTRFS_FS=n
+          EOF
+          echo "✅ Kernel config fragment created."
+
+          # 创建自定义安装脚本 (Customize image script) - 安装 CUPS
+          cat > userpatches/customize-image.sh << 'EOF'
+          #!/bin/bash
+          # 在镜像关闭前执行的脚本，用于安装 CUPS 打印服务
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y cups cups-client cups-filters printer-driver-all hplip network-manager
+          cupsctl --remote-admin --remote-any --share-printers
+          # 创建默认用户 'pi' 并加入 lpadmin 组
+          if ! id "pi" &>/dev/null; then
+              useradd -m -G lpadmin -s /bin/bash pi
+              echo "pi:armbian" | chpasswd
+          fi
+          apt-get clean
+          EOF
+          chmod +x userpatches/customize-image.sh
+          echo "✅ Customize script created for CUPS installation."
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
+            device-tree-compiler pv bc build-essential git dosfstools uuid-runtime \
+            udev kmod cpio gcc-arm-linux-gnueabihf
+
+      - name: Clean previous build cache
+        working-directory: armbian-build
+        run: rm -rf output/cache
+
+      - name: Build Armbian image
+        working-directory: armbian-build
+        env:
+          BOARD: rk3128-box
+          BRANCH: legacy
+          RELEASE: bullseye
+          BUILD_MINIMAL: no
+          BUILD_DESKTOP: no
+          KERNEL_CONFIGURE: no
+          COMPRESS_OUTPUTIMAGE: sha,img
+          ARCH: armhf
+        # 使用非交互式命令行进行编译 [citation:1]
+        run: |
+          ./compile.sh \
+            BOARD=$BOARD \
+            BRANCH=$BRANCH \
+            RELEASE=$RELEASE \
+            BUILD_MINIMAL=$BUILD_MINIMAL \
+            BUILD_DESKTOP=$BUILD_DESKTOP \
+            KERNEL_CONFIGURE=$KERNEL_CONFIGURE \
+            COMPRESS_OUTPUTIMAGE=$COMPRESS_OUTPUTIMAGE \
+            ARCH=$ARCH
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: armbian-rk3128-printserver
+          path: armbian-build/output/images/*.img
+          retention-days: 7
