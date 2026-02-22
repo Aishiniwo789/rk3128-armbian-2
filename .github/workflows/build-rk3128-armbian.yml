@@ -57,11 +57,15 @@ jobs:
       - name: Create output directory
         run: mkdir -p buildroot/build/output/images/
 
-      - name: Download base Armbian image
+      - name: Download and prepare base Armbian image
         run: |
           cd buildroot/build/output/images/
+          # 下载镜像
           wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          gunzip -f *.img.gz
+          # 解压
+          gunzip -f Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
+          # 重命名为脚本能识别的格式（关键修复）
+          mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
           ls -la
 
       - name: Start Armbian compilation for RK3128
