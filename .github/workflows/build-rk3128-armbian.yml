@@ -1,0 +1,61 @@
+name: Build Armbian for RK3128 with CUPS
+
+on:
+  workflow_dispatch: # 手动触发
+  push:
+    branches: [ main ]
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 4096
+          temp-reserve-mb: 1024
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
+
+      - name: Install dependencies (single line)
+        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools
+
+      - name: Setup ccache environment
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-rk3128-ccache
+          max-size: 4G
+
+      - name: Clone Armbian build script
+        run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
+
+      - name: Download Rockchip kernel source
+        run: git clone --depth=1 --branch master https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
+
+      - name: Configure kernel for RK3128
+        run: |
+          mkdir -p buildroot/output
+          echo "CONFIG_MACH_RK3128=y" > buildroot/build/config/kernel-rockchip.config
+          echo "CONFIG_USB_PRINTER=y" >> buildroot/build/config/kernel-rockchip.config
+          echo "CONFIG_USB_NET_DRIVERS=y" >> buildroot/build/config/kernel-rockchip.config
+
+      - name: Create custom package install script (CUPS integration)
+        run: echo 'DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
+
+      - name: Start Armbian compilation for RK3128
+        run: cd buildroot && sudo ./rebuild -d -b rk3128 -k rockchip -v jammy -a arm64 -s on
+
+      - name: Upload Armbian image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Armbian-RK3128-CUPS
+          path: buildroot/out/*.img
+          if-no-files-found: error
+          retention-days: 7
