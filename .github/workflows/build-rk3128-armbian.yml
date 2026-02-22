@@ -49,7 +49,7 @@ jobs:
         run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
 
       - name: Start Armbian compilation for RK3128
-        run: cd buildroot && sudo ./rebuild -d -b rk3128 -k 4.4 -v jammy -a arm64 -s on
+        run: cd buildroot && sudo ./rebuild -b rk3128 -k 4.4 -v jammy -a arm64 -s on
 
       - name: Upload Armbian image
         uses: actions/upload-artifact@v4
