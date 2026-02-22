@@ -7,7 +7,7 @@ on:
 
 env:
   TZ: Asia/Shanghai
-  KERNEL_VERSION: 5.10.251  # 使用最新的可用版本
+  KERNEL_VERSION: 5.10.251
 
 jobs:
   build:
@@ -26,7 +26,7 @@ jobs:
           remove-haskell: true
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget curl
+        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget curl fdisk
 
       - name: Setup ccache environment
         uses: hendrikmuhs/ccache-action@v1.2
@@ -35,6 +35,70 @@ jobs:
           max-size: 4G
 
       - name: Clone Armbian build script
+        run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
+
+      - name: Download Rockchip kernel source (develop-5.10 branch)
+        run: git clone --depth=1 --branch develop-5.10 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
+
+      - name: Create kernel config directory and set configuration
+        run: mkdir -p buildroot/build/config && echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
+
+      - name: Create custom package install script (CUPS integration)
+        run: mkdir -p buildroot/build/customize && echo 'DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
+
+      - name: Verify RK3128 device tree files
+        run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
+
+      - name: Add RK3128 to model_database.conf
+        run: |
+          echo '# Custom RK3128 entry' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          echo "r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/${KERNEL_VERSION}:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes" >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
+          cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
+
+      - name: Create output directory
+        run: mkdir -p buildroot/build/output/images/
+
+      - name: Download and verify base Armbian image
+        run: |
+          cd buildroot/build/output/images/
+          # 下载镜像
+          wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
+          # 验证下载完整性
+          echo "Download completed, file size: $(ls -lh *.img.gz | awk '{print $5}')"
+          # 解压
+          gunzip -f Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
+          # 验证解压后的镜像
+          echo "Extracted image size: $(ls -lh *.img | awk '{print $5}')"
+          # 检查镜像信息
+          file Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
+          # 检查分区表
+          fdisk -l Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img || echo "fdisk check failed but continuing"
+          # 重命名
+          mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
+          ls -la
+
+      - name: Try alternative base image if needed
+        if: failure()
+        run: |
+          cd buildroot/build/output/images/
+          # 清理失败的文件
+          rm -f *.img *.img.gz
+          # 尝试下载 bullseye 版本（Debian 11）
+          wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_bullseye_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
+          gunzip -f Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
+          mv Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img
+          ls -la
+
+      - name: Start Armbian compilation for RK3128
+        run: cd buildroot && sudo ./rebuild -b rk3128 -k ${KERNEL_VERSION} -a arm64 -s on
+
+      - name: Upload Armbian image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Armbian-RK3128-CUPS
+          path: buildroot/out/*.img
+          if-no-files-found: error
+          retention-days: 7      - name: Clone Armbian build script
         run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
 
       - name: Download Rockchip kernel source (develop-5.10 branch)
