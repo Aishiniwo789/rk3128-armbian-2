@@ -37,14 +37,20 @@ jobs:
       - name: Clone Armbian build script
         run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
 
-      - name: Download Rockchip kernel source (develop-5.10 branch)
+      - name: Download Rockchip kernel source
         run: git clone --depth=1 --branch develop-5.10 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
 
-      - name: Create kernel config directory and set configuration
-        run: mkdir -p buildroot/build/config && echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
+      - name: Create kernel config directory
+        run: mkdir -p buildroot/build/config
 
-      - name: Create custom package install script (CUPS integration)
-        run: mkdir -p buildroot/build/customize && echo 'DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
+      - name: Set kernel configuration
+        run: echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
+
+      - name: Create custom package script directory
+        run: mkdir -p buildroot/build/customize
+
+      - name: Create CUPS install script
+        run: echo 'DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
 
       - name: Verify RK3128 device tree files
         run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
@@ -58,22 +64,15 @@ jobs:
       - name: Create output directory
         run: mkdir -p buildroot/build/output/images/
 
-      - name: Download and verify base Armbian image
+      - name: Download base Armbian image
         run: |
           cd buildroot/build/output/images/
-          # 下载镜像
           wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          # 验证下载完整性
           echo "Download completed, file size: $(ls -lh *.img.gz | awk '{print $5}')"
-          # 解压
           gunzip -f Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          # 验证解压后的镜像
           echo "Extracted image size: $(ls -lh *.img | awk '{print $5}')"
-          # 检查镜像信息
           file Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
-          # 检查分区表
           fdisk -l Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img || echo "fdisk check failed but continuing"
-          # 重命名
           mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
           ls -la
 
@@ -81,53 +80,10 @@ jobs:
         if: failure()
         run: |
           cd buildroot/build/output/images/
-          # 清理失败的文件
           rm -f *.img *.img.gz
-          # 尝试下载 bullseye 版本（Debian 11）
           wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_bullseye_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
           gunzip -f Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
           mv Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img
-          ls -la
-
-      - name: Start Armbian compilation for RK3128
-        run: cd buildroot && sudo ./rebuild -b rk3128 -k ${KERNEL_VERSION} -a arm64 -s on
-
-      - name: Upload Armbian image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Armbian-RK3128-CUPS
-          path: buildroot/out/*.img
-          if-no-files-found: error
-          retention-days: 7      - name: Clone Armbian build script
-        run: git clone --depth=1 https://github.com/ophub/amlogic-s9xxx-armbian.git buildroot
-
-      - name: Download Rockchip kernel source (develop-5.10 branch)
-        run: git clone --depth=1 --branch develop-5.10 https://github.com/rockchip-linux/kernel.git buildroot/kernel-rockchip
-
-      - name: Create kernel config directory and set configuration
-        run: mkdir -p buildroot/build/config && echo 'CONFIG_MACH_RK3128=y CONFIG_USB_PRINTER=y CONFIG_USB_NET_DRIVERS=y CONFIG_PHY_ROCKCHIP_INNO_USB2=y CONFIG_ROCKCHIP_PHY=y' > buildroot/build/config/kernel-rockchip.config
-
-      - name: Create custom package install script (CUPS integration)
-        run: mkdir -p buildroot/build/customize && echo 'DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cups cups-bsd cups-client cups-filters printer-driver-all printer-driver-gutenprint avahi-daemon avahi-discover avahi-utils libnss-mdns' > buildroot/build/customize/custom_script.sh && chmod +x buildroot/build/customize/custom_script.sh
-
-      - name: Verify RK3128 device tree files
-        run: ls -la buildroot/kernel-rockchip/arch/arm/boot/dts/ || echo "No arm dts found" && ls -la buildroot/kernel-rockchip/arch/arm64/boot/dts/rockchip/ || echo "No arm64 rockchip dts found"
-
-      - name: Add RK3128 to model_database.conf
-        run: |
-          echo '# Custom RK3128 entry' >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
-          echo "r301:RK3128 TV Box:rk3128:rk3128-box.dtb:NA:NA:NA:1GB-Mem,100Mb-Nic,wifi:stable/${KERNEL_VERSION}:rockchip:rk3128:armbianEnv.txt:github-actions:rk3128:yes" >> buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf
-          cat buildroot/build-armbian/armbian-files/common-files/etc/model_database.conf | tail -n 5
-
-      - name: Create output directory
-        run: mkdir -p buildroot/build/output/images/
-
-      - name: Download and prepare base Armbian image
-        run: |
-          cd buildroot/build/output/images/
-          wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_jammy_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          gunzip -f Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img.gz
-          mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
           ls -la
 
       - name: Start Armbian compilation for RK3128
