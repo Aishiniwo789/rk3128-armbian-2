@@ -26,7 +26,7 @@ jobs:
           remove-haskell: true
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget curl fdisk
+        run: sudo apt-get update && sudo apt-get install -y ccache gcc-aarch64-linux-gnu bc bison build-essential cpio crossbuild-essential-arm64 device-tree-compiler flex gawk gdisk gettext git libelf-dev libncurses5-dev libpython3-dev libssl-dev lzop parted python3-distutils qemu-user-static rsync swig u-boot-tools uuid-dev xmlto zip dosfstools wget curl fdisk kpartx
 
       - name: Setup ccache environment
         uses: hendrikmuhs/ccache-action@v1.2
@@ -76,20 +76,48 @@ jobs:
           mv Armbian_26.02.0_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img
           ls -la
 
-      - name: Try alternative base image if needed
-        if: failure()
+      - name: Debug mount capabilities
+        run: |
+          echo "=== Kernel modules ==="
+          ls -la /lib/modules/ || echo "No modules"
+          echo "=== Loop devices ==="
+          ls -la /dev/loop* || echo "No loop devices"
+          echo "=== Mount info ==="
+          mount | head -10
+          echo "=== Testing loop device ==="
+          sudo losetup -f
+          echo "=== Creating test loop device ==="
+          dd if=/dev/zero of=/tmp/test.img bs=1M count=10
+          sudo losetup -f /tmp/test.img
+          sudo losetup -a
+          sudo losetup -D
+
+      - name: Try to mount and inspect the image manually
         run: |
           cd buildroot/build/output/images/
-          rm -f *.img *.img.gz
-          wget https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/Armbian_bullseye_arm64_server_2026.02/Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
-          gunzip -f Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img.gz
-          mv Armbian_26.02.0_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img Armbian_26.02.0-trunk_amlogic_s905x3_bullseye_6.1.161_server_2026.02.02.img
-          ls -la
+          IMG_FILE="Armbian_26.02.0-trunk_amlogic_s905x3_jammy_6.1.161_server_2026.02.02.img"
+          echo "=== Detailed image info ==="
+          file $IMG_FILE
+          echo "=== Partition table ==="
+          fdisk -l $IMG_FILE
+          echo "=== Trying to mount with offset ==="
+          # Try to find the partition offset (usually 512 * 2048 = 1048576 for first partition)
+          sudo mkdir -p /mnt/armbian
+          sudo losetup -P /dev/loop100 $IMG_FILE || echo "Failed to setup loop with partitions"
+          ls -la /dev/loop100* || echo "No partition devices created"
+          # Try to mount directly with offset
+          sudo mount -o loop,offset=$((512*2048)) $IMG_FILE /mnt/armbian && echo "Mount successful" || echo "Mount failed with offset 1M"
+          sudo umount /mnt/armbian 2>/dev/null || true
+          # Try with kpartx
+          sudo kpartx -av $IMG_FILE
+          ls -la /dev/mapper/ || echo "No mapper devices"
+          sudo kpartx -dv $IMG_FILE
 
       - name: Start Armbian compilation for RK3128
         run: cd buildroot && sudo ./rebuild -b rk3128 -k ${KERNEL_VERSION} -a arm64 -s on
 
       - name: Upload Armbian image
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Armbian-RK3128-CUPS
